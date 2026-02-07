@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	q "github.com/raugustinus/goqdsl/internal/goqdsl"
+	q "github.com/raugustinus/goqdsl"
 )
 
 func main() {

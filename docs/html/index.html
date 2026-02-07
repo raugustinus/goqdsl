@@ -90,7 +90,7 @@
 
   <h3>Build a query</h3>
 
-<pre><code><span class="kw">import</span> q <span class="str">"github.com/raugustinus/goqdsl/internal/goqdsl"</span>
+<pre><code><span class="kw">import</span> q <span class="str">"github.com/raugustinus/goqdsl"</span>
 
 <span class="cmt">// Build a parameterized SELECT</span>
 query := q.<span class="fn">Select</span>(<span class="str">"uuid"</span>, <span class="str">"name"</span>).
@@ -133,18 +133,17 @@ users, err := q.<span class="fn">FetchAll</span>[<span class="typ">User</span>](
 <pre><code>goqdsl/
 &#9500;&#9472;&#9472; Makefile
 &#9500;&#9472;&#9472; go.mod
+&#9500;&#9472;&#9472; builder.go               <span class="cmt">// Builder interface</span>
+&#9500;&#9472;&#9472; predicate.go             <span class="cmt">// 15 predicate types</span>
+&#9500;&#9472;&#9472; goqdsl.go                <span class="cmt">// SelectBuilder</span>
+&#9500;&#9472;&#9472; insert.go                <span class="cmt">// InsertBuilder</span>
+&#9500;&#9472;&#9472; update.go                <span class="cmt">// UpdateBuilder</span>
+&#9500;&#9472;&#9472; delete.go                <span class="cmt">// DeleteBuilder</span>
+&#9500;&#9472;&#9472; db.go                    <span class="cmt">// Execution layer</span>
+&#9500;&#9472;&#9472; debug.go                 <span class="cmt">// ToSQL() debug helper</span>
+&#9500;&#9472;&#9472; goqdsl_test.go           <span class="cmt">// 46 tests</span>
 &#9500;&#9472;&#9472; cmd/goqdsl/
 &#9474;   &#9492;&#9472;&#9472; main.go              <span class="cmt">// Demo binary</span>
-&#9500;&#9472;&#9472; internal/goqdsl/
-&#9474;   &#9500;&#9472;&#9472; builder.go           <span class="cmt">// Builder interface</span>
-&#9474;   &#9500;&#9472;&#9472; predicate.go         <span class="cmt">// 15 predicate types</span>
-&#9474;   &#9500;&#9472;&#9472; goqdsl.go            <span class="cmt">// SelectBuilder</span>
-&#9474;   &#9500;&#9472;&#9472; insert.go            <span class="cmt">// InsertBuilder</span>
-&#9474;   &#9500;&#9472;&#9472; update.go            <span class="cmt">// UpdateBuilder</span>
-&#9474;   &#9500;&#9472;&#9472; delete.go            <span class="cmt">// DeleteBuilder</span>
-&#9474;   &#9500;&#9472;&#9472; db.go                <span class="cmt">// Execution layer</span>
-&#9474;   &#9500;&#9472;&#9472; debug.go             <span class="cmt">// ToSQL() debug helper</span>
-&#9474;   &#9492;&#9472;&#9472; goqdsl_test.go       <span class="cmt">// 46 tests</span>
 &#9492;&#9472;&#9472; docs/html/               <span class="cmt">// This documentation</span></code></pre>
 
   <h2>Building</h2>

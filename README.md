@@ -19,7 +19,7 @@ safe for execution via `database/sql`.
 ## Quick Start
 
 ```go
-import q "github.com/raugustinus/goqdsl/internal/goqdsl"
+import q "github.com/raugustinus/goqdsl"
 ```
 
 ### SELECT
