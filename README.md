@@ -1,5 +1,7 @@
 # GoQDSL
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/raugustinus/goqdsl.svg)](https://pkg.go.dev/github.com/raugustinus/goqdsl)
+
 A fluent, type-safe SQL query builder DSL for Go, targeting PostgreSQL.
 
 Build parameterized queries programmatically using a chainable API instead of
