@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GoQDSL — Fluent SQL Query Builder for Go</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a href="index.html" class="logo">Go<span>QDSL</span></a>
+  <span class="tagline">Fluent SQL Query Builder for Go + PostgreSQL</span>
+</header>
+
+<div class="layout">
+
+<aside class="sidebar">
+  <nav>
+    <div class="nav-section">Getting Started</div>
+    <a href="index.html" class="active">Overview</a>
+    <div class="nav-section">Query Builders</div>
+    <a href="select.html">SELECT</a>
+    <a href="insert.html">INSERT</a>
+    <a href="update.html">UPDATE</a>
+    <a href="delete.html">DELETE</a>
+    <div class="nav-section">Core Concepts</div>
+    <a href="predicates.html">Predicates</a>
+    <a href="execution.html">Execution &amp; DB</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+  <h1>GoQDSL</h1>
+  <p class="lead">
+    A fluent, type-safe query builder DSL for constructing parameterized SQL
+    statements in Go, targeting PostgreSQL.
+  </p>
+
+  <p>
+    GoQDSL lets you build SQL queries programmatically using a chainable
+    builder API instead of concatenating raw strings. Every query produces
+    parameterized output (<code>$1</code>, <code>$2</code>, &hellip;) safe
+    for execution via <code>database/sql</code>.
+  </p>
+
+  <h2>Features</h2>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h3>SELECT Builder</h3>
+      <p>Full support: DISTINCT, JOINs (INNER, LEFT, RIGHT, FULL),
+         WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET.</p>
+      <a href="select.html">View docs &rarr;</a>
+    </div>
+    <div class="feature-card">
+      <h3>INSERT Builder</h3>
+      <p>Single and multi-row inserts with column lists and
+         PostgreSQL RETURNING clause.</p>
+      <a href="insert.html">View docs &rarr;</a>
+    </div>
+    <div class="feature-card">
+      <h3>UPDATE Builder</h3>
+      <p>Fluent SET assignments with WHERE predicates
+         and RETURNING support.</p>
+      <a href="update.html">View docs &rarr;</a>
+    </div>
+    <div class="feature-card">
+      <h3>DELETE Builder</h3>
+      <p>Safe DELETE with WHERE predicates and optional
+         RETURNING clause.</p>
+      <a href="delete.html">View docs &rarr;</a>
+    </div>
+    <div class="feature-card">
+      <h3>Rich Predicates</h3>
+      <p>15 composable predicate types: Eq, Neq, Gt, Lt, Like, In,
+         Between, IsNull, And, Or, Not, and more.</p>
+      <a href="predicates.html">View docs &rarr;</a>
+    </div>
+    <div class="feature-card">
+      <h3>Execution Layer</h3>
+      <p>database/sql wrapper with generic FetchOne[T] and FetchAll[T]
+         for scanning rows into structs.</p>
+      <a href="execution.html">View docs &rarr;</a>
+    </div>
+  </div>
+
+  <h2>Quick Start</h2>
+
+  <h3>Build a query</h3>
+
+<pre><code><span class="kw">import</span> q <span class="str">"github.com/raugustinus/goqdsl/internal/goqdsl"</span>
+
+<span class="cmt">// Build a parameterized SELECT</span>
+query := q.<span class="fn">Select</span>(<span class="str">"uuid"</span>, <span class="str">"name"</span>).
+    <span class="fn">From</span>(<span class="str">"users"</span>).
+    <span class="fn">Where</span>(q.<span class="fn">Eq</span>(<span class="str">"active"</span>, <span class="kw">true</span>), q.<span class="fn">Gt</span>(<span class="str">"age"</span>, 18)).
+    <span class="fn">OrderBy</span>(<span class="str">"name"</span>, q.Asc).
+    <span class="fn">Limit</span>(10)
+
+sql, args := query.<span class="fn">Build</span>()</code></pre>
+
+  <p class="output-label">Output</p>
+  <div class="output">
+SQL:  SELECT uuid, name FROM users WHERE active = $1 AND age > $2 ORDER BY name ASC LIMIT $3
+Args: [true 18 10]
+  </div>
+
+  <h3>Debug output (inlined values)</h3>
+
+<pre><code>fmt.<span class="fn">Println</span>(q.<span class="fn">ToSQL</span>(query))</code></pre>
+
+  <div class="output">SELECT uuid, name FROM users WHERE active = TRUE AND age > 18 ORDER BY name ASC LIMIT 10</div>
+
+  <h3>Execute against a database</h3>
+
+<pre><code><span class="kw">type</span> <span class="typ">User</span> <span class="kw">struct</span> {
+    UUID <span class="typ">string</span> <span class="str">`db:"uuid"`</span>
+    Name <span class="typ">string</span> <span class="str">`db:"name"`</span>
+}
+
+db := q.<span class="fn">NewDB</span>(sqlDB)  <span class="cmt">// wrap a *sql.DB</span>
+
+<span class="cmt">// Fetch a single row into a struct</span>
+user, err := q.<span class="fn">FetchOne</span>[<span class="typ">User</span>](ctx, db, query)
+
+<span class="cmt">// Fetch all matching rows</span>
+users, err := q.<span class="fn">FetchAll</span>[<span class="typ">User</span>](ctx, db, query)</code></pre>
+
+  <h2>Project Structure</h2>
+
+<pre><code>goqdsl/
+&#9500;&#9472;&#9472; Makefile
+&#9500;&#9472;&#9472; go.mod
+&#9500;&#9472;&#9472; cmd/goqdsl/
+&#9474;   &#9492;&#9472;&#9472; main.go              <span class="cmt">// Demo binary</span>
+&#9500;&#9472;&#9472; internal/goqdsl/
+&#9474;   &#9500;&#9472;&#9472; builder.go           <span class="cmt">// Builder interface</span>
+&#9474;   &#9500;&#9472;&#9472; predicate.go         <span class="cmt">// 15 predicate types</span>
+&#9474;   &#9500;&#9472;&#9472; goqdsl.go            <span class="cmt">// SelectBuilder</span>
+&#9474;   &#9500;&#9472;&#9472; insert.go            <span class="cmt">// InsertBuilder</span>
+&#9474;   &#9500;&#9472;&#9472; update.go            <span class="cmt">// UpdateBuilder</span>
+&#9474;   &#9500;&#9472;&#9472; delete.go            <span class="cmt">// DeleteBuilder</span>
+&#9474;   &#9500;&#9472;&#9472; db.go                <span class="cmt">// Execution layer</span>
+&#9474;   &#9500;&#9472;&#9472; debug.go             <span class="cmt">// ToSQL() debug helper</span>
+&#9474;   &#9492;&#9472;&#9472; goqdsl_test.go       <span class="cmt">// 46 tests</span>
+&#9492;&#9472;&#9472; docs/html/               <span class="cmt">// This documentation</span></code></pre>
+
+  <h2>Building</h2>
+
+<pre><code><span class="cmt"># Run everything: format, vet, test, compile</span>
+make all
+
+<span class="cmt"># Individual targets</span>
+make build       <span class="cmt"># compile to bin/goqdsl</span>
+make test        <span class="cmt"># run all tests</span>
+make fmt         <span class="cmt"># go fmt</span>
+make vet         <span class="cmt"># go vet</span>
+make clean       <span class="cmt"># remove bin/</span>
+make run         <span class="cmt"># build and run the demo</span></code></pre>
+
+  <h2>The Builder Interface</h2>
+
+  <p>
+    All query builders implement the <code>Builder</code> interface, which
+    is the single integration point with the execution layer:
+  </p>
+
+  <div class="sig">
+    <code><span class="kw">type</span> <span class="typ">Builder</span> <span class="kw">interface</span> {
+    <span class="fn">Build</span>() (<span class="typ">string</span>, []<span class="typ">any</span>)
+}</code>
+  </div>
+
+  <p>
+    <code>Build()</code> returns a parameterized SQL string and the
+    corresponding argument slice. This output is passed directly to
+    <code>database/sql</code> methods like <code>QueryContext</code> or
+    <code>ExecContext</code>, or to the higher-level
+    <a href="execution.html">FetchOne / FetchAll</a> helpers.
+  </p>
+
+</main>
+</div>
+
+<footer class="site-footer">
+  GoQDSL &mdash; BSD 3-Clause License &mdash; &copy; 2024 Rob Augustinus
+</footer>
+
+</body>
+</html>

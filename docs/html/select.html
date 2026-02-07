@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SELECT Builder — GoQDSL</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a href="index.html" class="logo">Go<span>QDSL</span></a>
+  <span class="tagline">Fluent SQL Query Builder for Go + PostgreSQL</span>
+</header>
+
+<div class="layout">
+
+<aside class="sidebar">
+  <nav>
+    <div class="nav-section">Getting Started</div>
+    <a href="index.html">Overview</a>
+    <div class="nav-section">Query Builders</div>
+    <a href="select.html" class="active">SELECT</a>
+    <a href="insert.html">INSERT</a>
+    <a href="update.html">UPDATE</a>
+    <a href="delete.html">DELETE</a>
+    <div class="nav-section">Core Concepts</div>
+    <a href="predicates.html">Predicates</a>
+    <a href="execution.html">Execution &amp; DB</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+  <h1>SELECT Builder</h1>
+  <p class="lead">
+    Construct parameterized SELECT statements with a fluent, chainable API.
+    Supports DISTINCT, all JOIN types, WHERE with composable predicates,
+    GROUP BY, HAVING, ORDER BY, LIMIT, and OFFSET.
+  </p>
+
+  <!-- ── Select ────────────────────────────────────── -->
+
+  <h2 id="select">Select</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> <span class="fn">Select</span>(fields ...<span class="typ">string</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+  <p>
+    Creates a new <code>SelectBuilder</code> with the given column list.
+    This is the entry point for building SELECT queries.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"uuid"</span>, <span class="str">"name"</span>, <span class="str">"created"</span>).
+    <span class="fn">From</span>(<span class="str">"users"</span>)
+
+sql, args := q.<span class="fn">Build</span>()
+<span class="cmt">// SQL:  SELECT uuid, name, created FROM users</span>
+<span class="cmt">// Args: []</span></code></pre>
+
+  <!-- ── Distinct ──────────────────────────────────── -->
+
+  <h2 id="distinct">Distinct</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">Distinct</span>() *<span class="typ">SelectBuilder</span></code>
+  </div>
+  <p>Marks the query as <code>SELECT DISTINCT</code>.</p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"department"</span>).
+    <span class="fn">From</span>(<span class="str">"employees"</span>).
+    <span class="fn">Distinct</span>()
+
+<span class="cmt">// SELECT DISTINCT department FROM employees</span></code></pre>
+
+  <!-- ── From ──────────────────────────────────────── -->
+
+  <h2 id="from">From</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">From</span>(table <span class="typ">string</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+  <p>
+    Sets the target table. You can include an alias in the table string,
+    e.g. <code>"users u"</code>.
+  </p>
+
+<pre><code>goqdsl.<span class="fn">Select</span>(<span class="str">"u.name"</span>).<span class="fn">From</span>(<span class="str">"users u"</span>)
+<span class="cmt">// SELECT u.name FROM users u</span></code></pre>
+
+  <!-- ── JOINs ─────────────────────────────────────── -->
+
+  <h2 id="joins">JOINs</h2>
+  <p>
+    Four JOIN methods are available. Each takes the joined table (with
+    optional alias), and the left and right columns for the ON clause.
+    Multiple joins can be chained.
+  </p>
+
+  <h3 id="inner-join">InnerJoin</h3>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">InnerJoin</span>(table, left, right <span class="typ">string</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+
+  <h3 id="left-join">LeftJoin</h3>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">LeftJoin</span>(table, left, right <span class="typ">string</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+
+  <h3 id="right-join">RightJoin</h3>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">RightJoin</span>(table, left, right <span class="typ">string</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+
+  <h3 id="full-join">FullJoin</h3>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">FullJoin</span>(table, left, right <span class="typ">string</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"u.name"</span>, <span class="str">"o.total"</span>, <span class="str">"p.method"</span>).
+    <span class="fn">From</span>(<span class="str">"users u"</span>).
+    <span class="fn">InnerJoin</span>(<span class="str">"orders o"</span>, <span class="str">"u.id"</span>, <span class="str">"o.user_id"</span>).
+    <span class="fn">LeftJoin</span>(<span class="str">"payments p"</span>, <span class="str">"o.id"</span>, <span class="str">"p.order_id"</span>)
+
+sql, _ := q.<span class="fn">Build</span>()
+<span class="cmt">// SELECT u.name, o.total, p.method FROM users u
+//   INNER JOIN orders o ON u.id = o.user_id
+//   LEFT JOIN payments p ON o.id = p.order_id</span></code></pre>
+
+  <!-- ── Where ─────────────────────────────────────── -->
+
+  <h2 id="where">Where</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">Where</span>(preds ...<span class="typ">Predicate</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+  <p>
+    Appends one or more <a href="predicates.html">predicates</a> to the
+    WHERE clause. Multiple predicates are ANDed together.
+    Can be called multiple times to add more conditions.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"*"</span>).
+    <span class="fn">From</span>(<span class="str">"users"</span>).
+    <span class="fn">Where</span>(
+        goqdsl.<span class="fn">Eq</span>(<span class="str">"active"</span>, <span class="kw">true</span>),
+        goqdsl.<span class="fn">Gt</span>(<span class="str">"age"</span>, 18),
+    )
+
+sql, args := q.<span class="fn">Build</span>()
+<span class="cmt">// SQL:  SELECT * FROM users WHERE active = $1 AND age > $2</span>
+<span class="cmt">// Args: [true, 18]</span></code></pre>
+
+  <p>
+    For OR logic or complex nesting, use the
+    <a href="predicates.html#or"><code>Or()</code></a> and
+    <a href="predicates.html#and"><code>And()</code></a> combinators:
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"*"</span>).
+    <span class="fn">From</span>(<span class="str">"users"</span>).
+    <span class="fn">Where</span>(
+        goqdsl.<span class="fn">Or</span>(goqdsl.<span class="fn">Eq</span>(<span class="str">"role"</span>, <span class="str">"admin"</span>), goqdsl.<span class="fn">Eq</span>(<span class="str">"role"</span>, <span class="str">"super"</span>)),
+        goqdsl.<span class="fn">Eq</span>(<span class="str">"active"</span>, <span class="kw">true</span>),
+    )
+
+<span class="cmt">// SQL:  SELECT * FROM users WHERE (role = $1 OR role = $2) AND active = $3</span>
+<span class="cmt">// Args: ["admin", "super", true]</span></code></pre>
+
+  <!-- ── GroupBy ───────────────────────────────────── -->
+
+  <h2 id="group-by">GroupBy</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">GroupBy</span>(cols ...<span class="typ">string</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+  <p>Sets the GROUP BY columns.</p>
+
+  <!-- ── Having ────────────────────────────────────── -->
+
+  <h2 id="having">Having</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">Having</span>(preds ...<span class="typ">Predicate</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+  <p>
+    Appends predicates to the HAVING clause (ANDed together).
+    Typically used with <code>GroupBy</code> for aggregate filtering.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"department"</span>, <span class="str">"COUNT(*)"</span>).
+    <span class="fn">From</span>(<span class="str">"employees"</span>).
+    <span class="fn">GroupBy</span>(<span class="str">"department"</span>).
+    <span class="fn">Having</span>(goqdsl.<span class="fn">Gt</span>(<span class="str">"COUNT(*)"</span>, 5))
+
+sql, args := q.<span class="fn">Build</span>()
+<span class="cmt">// SQL:  SELECT department, COUNT(*) FROM employees</span>
+<span class="cmt">//       GROUP BY department HAVING COUNT(*) > $1</span>
+<span class="cmt">// Args: [5]</span></code></pre>
+
+  <!-- ── OrderBy ───────────────────────────────────── -->
+
+  <h2 id="order-by">OrderBy</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">OrderBy</span>(col <span class="typ">string</span>, dir <span class="typ">OrderDir</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+  <p>
+    Adds an ORDER BY clause. Use <code>goqdsl.Asc</code> or
+    <code>goqdsl.Desc</code> for direction. Can be called multiple
+    times for multi-column ordering.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"name"</span>, <span class="str">"age"</span>).
+    <span class="fn">From</span>(<span class="str">"users"</span>).
+    <span class="fn">OrderBy</span>(<span class="str">"age"</span>, goqdsl.Desc).
+    <span class="fn">OrderBy</span>(<span class="str">"name"</span>, goqdsl.Asc)
+
+<span class="cmt">// SELECT name, age FROM users ORDER BY age DESC, name ASC</span></code></pre>
+
+  <!-- ── Limit ─────────────────────────────────────── -->
+
+  <h2 id="limit">Limit</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">Limit</span>(n <span class="typ">int</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+  <p>
+    Sets the LIMIT value. The value is parameterized (<code>$N</code>).
+  </p>
+
+  <!-- ── Offset ────────────────────────────────────── -->
+
+  <h2 id="offset">Offset</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">Offset</span>(n <span class="typ">int</span>) *<span class="typ">SelectBuilder</span></code>
+  </div>
+  <p>
+    Sets the OFFSET value. The value is parameterized (<code>$N</code>).
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"*"</span>).
+    <span class="fn">From</span>(<span class="str">"logs"</span>).
+    <span class="fn">OrderBy</span>(<span class="str">"created"</span>, goqdsl.Desc).
+    <span class="fn">Limit</span>(20).
+    <span class="fn">Offset</span>(40)
+
+sql, args := q.<span class="fn">Build</span>()
+<span class="cmt">// SQL:  SELECT * FROM logs ORDER BY created DESC LIMIT $1 OFFSET $2</span>
+<span class="cmt">// Args: [20, 40]</span></code></pre>
+
+  <!-- ── Build ─────────────────────────────────────── -->
+
+  <h2 id="build">Build</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">SelectBuilder</span>) <span class="fn">Build</span>() (<span class="typ">string</span>, []<span class="typ">any</span>)</code>
+  </div>
+  <p>
+    Generates the parameterized SQL string and argument slice. This method
+    satisfies the <a href="execution.html#builder">Builder</a> interface,
+    so the result can be passed directly to the
+    <a href="execution.html">execution layer</a>.
+  </p>
+
+  <!-- ── Full example ──────────────────────────────── -->
+
+  <h2 id="full-example">Full Example</h2>
+  <p>A complex query using most features:</p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"u.name"</span>, <span class="str">"COUNT(o.id) AS order_count"</span>).
+    <span class="fn">From</span>(<span class="str">"users u"</span>).
+    <span class="fn">InnerJoin</span>(<span class="str">"orders o"</span>, <span class="str">"u.id"</span>, <span class="str">"o.user_id"</span>).
+    <span class="fn">Where</span>(
+        goqdsl.<span class="fn">Eq</span>(<span class="str">"u.active"</span>, <span class="kw">true</span>),
+        goqdsl.<span class="fn">Gte</span>(<span class="str">"o.total"</span>, 100),
+    ).
+    <span class="fn">GroupBy</span>(<span class="str">"u.name"</span>).
+    <span class="fn">Having</span>(goqdsl.<span class="fn">Gt</span>(<span class="str">"COUNT(o.id)"</span>, 2)).
+    <span class="fn">OrderBy</span>(<span class="str">"order_count"</span>, goqdsl.Desc).
+    <span class="fn">Limit</span>(10)
+
+sql, args := q.<span class="fn">Build</span>()</code></pre>
+
+  <p class="output-label">Output</p>
+  <div class="output">
+SQL:  SELECT u.name, COUNT(o.id) AS order_count FROM users u
+      INNER JOIN orders o ON u.id = o.user_id
+      WHERE u.active = $1 AND o.total >= $2
+      GROUP BY u.name
+      HAVING COUNT(o.id) > $3
+      ORDER BY order_count DESC
+      LIMIT $4
+Args: [true, 100, 2, 10]
+  </div>
+
+</main>
+</div>
+
+<footer class="site-footer">
+  GoQDSL &mdash; BSD 3-Clause License &mdash; &copy; 2024 Rob Augustinus
+</footer>
+
+</body>
+</html>

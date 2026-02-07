@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>INSERT Builder — GoQDSL</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a href="index.html" class="logo">Go<span>QDSL</span></a>
+  <span class="tagline">Fluent SQL Query Builder for Go + PostgreSQL</span>
+</header>
+
+<div class="layout">
+
+<aside class="sidebar">
+  <nav>
+    <div class="nav-section">Getting Started</div>
+    <a href="index.html">Overview</a>
+    <div class="nav-section">Query Builders</div>
+    <a href="select.html">SELECT</a>
+    <a href="insert.html" class="active">INSERT</a>
+    <a href="update.html">UPDATE</a>
+    <a href="delete.html">DELETE</a>
+    <div class="nav-section">Core Concepts</div>
+    <a href="predicates.html">Predicates</a>
+    <a href="execution.html">Execution &amp; DB</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+  <h1>INSERT Builder</h1>
+  <p class="lead">
+    Construct parameterized INSERT statements with support for
+    column lists, single and multi-row values, and PostgreSQL's
+    RETURNING clause.
+  </p>
+
+  <!-- ── InsertInto ────────────────────────────────── -->
+
+  <h2 id="insert-into">InsertInto</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> <span class="fn">InsertInto</span>(table <span class="typ">string</span>) *<span class="typ">InsertBuilder</span></code>
+  </div>
+  <p>
+    Creates a new <code>InsertBuilder</code> for the given table.
+    This is the entry point for building INSERT statements.
+  </p>
+
+  <!-- ── Columns ───────────────────────────────────── -->
+
+  <h2 id="columns">Columns</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">InsertBuilder</span>) <span class="fn">Columns</span>(cols ...<span class="typ">string</span>) *<span class="typ">InsertBuilder</span></code>
+  </div>
+  <p>
+    Sets the column names for the INSERT. The number of values in
+    each <code>Values()</code> call must match.
+  </p>
+
+  <!-- ── Values ────────────────────────────────────── -->
+
+  <h2 id="values">Values</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">InsertBuilder</span>) <span class="fn">Values</span>(vals ...<span class="typ">any</span>) *<span class="typ">InsertBuilder</span></code>
+  </div>
+  <p>
+    Adds a row of values. Can be called multiple times for multi-row inserts.
+    Each call adds one row to the VALUES clause.
+  </p>
+
+  <h3>Single row</h3>
+
+<pre><code>q := goqdsl.<span class="fn">InsertInto</span>(<span class="str">"users"</span>).
+    <span class="fn">Columns</span>(<span class="str">"name"</span>, <span class="str">"email"</span>).
+    <span class="fn">Values</span>(<span class="str">"Alice"</span>, <span class="str">"alice@example.com"</span>)
+
+sql, args := q.<span class="fn">Build</span>()</code></pre>
+
+  <p class="output-label">Output</p>
+  <div class="output">
+SQL:  INSERT INTO users (name, email) VALUES ($1, $2)
+Args: ["Alice", "alice@example.com"]
+  </div>
+
+  <h3>Multiple rows</h3>
+
+<pre><code>q := goqdsl.<span class="fn">InsertInto</span>(<span class="str">"users"</span>).
+    <span class="fn">Columns</span>(<span class="str">"name"</span>, <span class="str">"email"</span>).
+    <span class="fn">Values</span>(<span class="str">"Alice"</span>, <span class="str">"alice@example.com"</span>).
+    <span class="fn">Values</span>(<span class="str">"Bob"</span>, <span class="str">"bob@example.com"</span>)
+
+sql, args := q.<span class="fn">Build</span>()</code></pre>
+
+  <p class="output-label">Output</p>
+  <div class="output">
+SQL:  INSERT INTO users (name, email) VALUES ($1, $2), ($3, $4)
+Args: ["Alice", "alice@example.com", "Bob", "bob@example.com"]
+  </div>
+
+  <!-- ── Returning ─────────────────────────────────── -->
+
+  <h2 id="returning">Returning</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">InsertBuilder</span>) <span class="fn">Returning</span>(cols ...<span class="typ">string</span>) *<span class="typ">InsertBuilder</span></code>
+  </div>
+  <p>
+    Adds a RETURNING clause (PostgreSQL extension). Commonly used to
+    retrieve auto-generated columns like UUIDs or timestamps.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">InsertInto</span>(<span class="str">"users"</span>).
+    <span class="fn">Columns</span>(<span class="str">"name"</span>).
+    <span class="fn">Values</span>(<span class="str">"Alice"</span>).
+    <span class="fn">Returning</span>(<span class="str">"uuid"</span>, <span class="str">"created"</span>)
+
+sql, args := q.<span class="fn">Build</span>()</code></pre>
+
+  <p class="output-label">Output</p>
+  <div class="output">
+SQL:  INSERT INTO users (name) VALUES ($1) RETURNING uuid, created
+Args: ["Alice"]
+  </div>
+
+  <!-- ── Build ─────────────────────────────────────── -->
+
+  <h2 id="build">Build</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">InsertBuilder</span>) <span class="fn">Build</span>() (<span class="typ">string</span>, []<span class="typ">any</span>)</code>
+  </div>
+  <p>
+    Generates the parameterized SQL string and argument slice. Satisfies the
+    <a href="execution.html#builder">Builder</a> interface.
+  </p>
+
+  <!-- ── Execution ─────────────────────────────────── -->
+
+  <h2 id="execution">Executing an INSERT</h2>
+  <p>
+    Use the <a href="execution.html">execution layer</a> to run the INSERT
+    and optionally scan RETURNING columns:
+  </p>
+
+<pre><code><span class="kw">type</span> <span class="typ">NewUser</span> <span class="kw">struct</span> {
+    UUID    <span class="typ">string</span>    <span class="str">`db:"uuid"`</span>
+    Created <span class="typ">time.Time</span> <span class="str">`db:"created"`</span>
+}
+
+q := goqdsl.<span class="fn">InsertInto</span>(<span class="str">"users"</span>).
+    <span class="fn">Columns</span>(<span class="str">"name"</span>).
+    <span class="fn">Values</span>(<span class="str">"Alice"</span>).
+    <span class="fn">Returning</span>(<span class="str">"uuid"</span>, <span class="str">"created"</span>)
+
+<span class="cmt">// Scan the RETURNING row into a struct</span>
+result, err := goqdsl.<span class="fn">FetchOne</span>[<span class="typ">NewUser</span>](ctx, db, q)
+
+<span class="cmt">// Or just execute without scanning</span>
+_, err = db.<span class="fn">Exec</span>(ctx, q)</code></pre>
+
+</main>
+</div>
+
+<footer class="site-footer">
+  GoQDSL &mdash; BSD 3-Clause License &mdash; &copy; 2024 Rob Augustinus
+</footer>
+
+</body>
+</html>

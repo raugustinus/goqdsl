@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Execution &amp; DB — GoQDSL</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a href="index.html" class="logo">Go<span>QDSL</span></a>
+  <span class="tagline">Fluent SQL Query Builder for Go + PostgreSQL</span>
+</header>
+
+<div class="layout">
+
+<aside class="sidebar">
+  <nav>
+    <div class="nav-section">Getting Started</div>
+    <a href="index.html">Overview</a>
+    <div class="nav-section">Query Builders</div>
+    <a href="select.html">SELECT</a>
+    <a href="insert.html">INSERT</a>
+    <a href="update.html">UPDATE</a>
+    <a href="delete.html">DELETE</a>
+    <div class="nav-section">Core Concepts</div>
+    <a href="predicates.html">Predicates</a>
+    <a href="execution.html" class="active">Execution &amp; DB</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+  <h1>Execution &amp; DB</h1>
+  <p class="lead">
+    GoQDSL provides a thin execution layer on top of <code>database/sql</code>
+    that accepts any <code>Builder</code> and handles parameterized query
+    execution. Generic helper functions scan rows directly into Go structs.
+  </p>
+
+  <!-- ── Builder interface ─────────────────────────── -->
+
+  <h2 id="builder">The Builder Interface</h2>
+
+  <div class="sig">
+    <code><span class="kw">type</span> <span class="typ">Builder</span> <span class="kw">interface</span> {
+    <span class="fn">Build</span>() (<span class="typ">string</span>, []<span class="typ">any</span>)
+}</code>
+  </div>
+
+  <p>
+    All query builders (<a href="select.html">SelectBuilder</a>,
+    <a href="insert.html">InsertBuilder</a>,
+    <a href="update.html">UpdateBuilder</a>,
+    <a href="delete.html">DeleteBuilder</a>) implement this interface.
+    <code>Build()</code> returns a parameterized SQL string and the
+    matching argument slice. This is the single integration point
+    between query construction and execution.
+  </p>
+
+  <!-- ── DB wrapper ────────────────────────────────── -->
+
+  <h2 id="db">DB Wrapper</h2>
+
+  <h3 id="newdb">NewDB</h3>
+  <div class="sig">
+    <code><span class="kw">func</span> <span class="fn">NewDB</span>(conn *<span class="typ">sql.DB</span>) *<span class="typ">DB</span></code>
+  </div>
+  <p>
+    Creates a new <code>DB</code> wrapper around an existing
+    <code>*sql.DB</code> connection. The wrapper adds builder-aware
+    methods but does not manage the connection lifecycle.
+  </p>
+
+<pre><code><span class="kw">import</span> (
+    <span class="str">"database/sql"</span>
+    _ <span class="str">"github.com/lib/pq"</span>  <span class="cmt">// or any PostgreSQL driver</span>
+    <span class="str">"github.com/raugustinus/goqdsl/internal/goqdsl"</span>
+)
+
+sqlDB, err := sql.<span class="fn">Open</span>(<span class="str">"postgres"</span>, connStr)
+<span class="kw">if</span> err != <span class="kw">nil</span> {
+    log.<span class="fn">Fatal</span>(err)
+}
+
+db := goqdsl.<span class="fn">NewDB</span>(sqlDB)</code></pre>
+
+  <h3 id="conn">Conn</h3>
+  <div class="sig">
+    <code><span class="kw">func</span> (db *<span class="typ">DB</span>) <span class="fn">Conn</span>() *<span class="typ">sql.DB</span></code>
+  </div>
+  <p>Returns the underlying <code>*sql.DB</code> for direct access.</p>
+
+  <!-- ── Exec ──────────────────────────────────────── -->
+
+  <h2 id="exec">Exec</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (db *<span class="typ">DB</span>) <span class="fn">Exec</span>(ctx <span class="typ">context.Context</span>, b <span class="typ">Builder</span>) (<span class="typ">sql.Result</span>, <span class="typ">error</span>)</code>
+  </div>
+  <p>
+    Executes a builder's query (typically INSERT, UPDATE, or DELETE)
+    and returns the <code>sql.Result</code>. Internally calls
+    <code>db.conn.ExecContext</code> with the parameterized SQL and args.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">InsertInto</span>(<span class="str">"users"</span>).
+    <span class="fn">Columns</span>(<span class="str">"name"</span>, <span class="str">"email"</span>).
+    <span class="fn">Values</span>(<span class="str">"Alice"</span>, <span class="str">"alice@example.com"</span>)
+
+result, err := db.<span class="fn">Exec</span>(ctx, q)
+rowsAffected, _ := result.<span class="fn">RowsAffected</span>()</code></pre>
+
+  <!-- ── Query ─────────────────────────────────────── -->
+
+  <h2 id="query">Query</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (db *<span class="typ">DB</span>) <span class="fn">Query</span>(ctx <span class="typ">context.Context</span>, b <span class="typ">Builder</span>) (*<span class="typ">sql.Rows</span>, <span class="typ">error</span>)</code>
+  </div>
+  <p>
+    Executes a builder's query and returns <code>*sql.Rows</code> for
+    manual iteration. Use this when you need full control over row scanning.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"uuid"</span>, <span class="str">"name"</span>).<span class="fn">From</span>(<span class="str">"users"</span>)
+
+rows, err := db.<span class="fn">Query</span>(ctx, q)
+<span class="kw">if</span> err != <span class="kw">nil</span> { <span class="cmt">/* handle */</span> }
+<span class="kw">defer</span> rows.<span class="fn">Close</span>()
+
+<span class="kw">for</span> rows.<span class="fn">Next</span>() {
+    <span class="kw">var</span> uuid, name <span class="typ">string</span>
+    rows.<span class="fn">Scan</span>(&amp;uuid, &amp;name)
+    <span class="cmt">// ...</span>
+}</code></pre>
+
+  <!-- ── QueryRow ──────────────────────────────────── -->
+
+  <h2 id="query-row">QueryRow</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (db *<span class="typ">DB</span>) <span class="fn">QueryRow</span>(ctx <span class="typ">context.Context</span>, b <span class="typ">Builder</span>) *<span class="typ">sql.Row</span></code>
+  </div>
+  <p>
+    Executes a builder's query and returns a single <code>*sql.Row</code>.
+    Useful for queries expected to return exactly one row.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"COUNT(*)"</span>).<span class="fn">From</span>(<span class="str">"users"</span>)
+
+<span class="kw">var</span> count <span class="typ">int</span>
+err := db.<span class="fn">QueryRow</span>(ctx, q).<span class="fn">Scan</span>(&amp;count)</code></pre>
+
+  <!-- ── FetchOne ──────────────────────────────────── -->
+
+  <h2 id="fetch-one">FetchOne[T]</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> <span class="fn">FetchOne</span>[<span class="typ">T</span> <span class="typ">any</span>](ctx <span class="typ">context.Context</span>, db *<span class="typ">DB</span>, b <span class="typ">Builder</span>) (<span class="typ">T</span>, <span class="typ">error</span>)</code>
+  </div>
+  <p>
+    Executes the query and scans the first row into a struct of type
+    <code>T</code>. If no rows are returned, it returns
+    <code>sql.ErrNoRows</code>.
+  </p>
+  <p>
+    Struct fields are matched to SQL columns using the <code>db</code>
+    struct tag. If no tag is present, the field name is used as-is.
+    Fields tagged <code>db:"-"</code> are skipped.
+  </p>
+
+<pre><code><span class="kw">type</span> <span class="typ">User</span> <span class="kw">struct</span> {
+    UUID    <span class="typ">string</span>    <span class="str">`db:"uuid"`</span>
+    Name    <span class="typ">string</span>    <span class="str">`db:"name"`</span>
+    Created <span class="typ">time.Time</span> <span class="str">`db:"created"`</span>
+}
+
+q := goqdsl.<span class="fn">Select</span>(<span class="str">"uuid"</span>, <span class="str">"name"</span>, <span class="str">"created"</span>).
+    <span class="fn">From</span>(<span class="str">"users"</span>).
+    <span class="fn">Where</span>(goqdsl.<span class="fn">Eq</span>(<span class="str">"uuid"</span>, id))
+
+user, err := goqdsl.<span class="fn">FetchOne</span>[<span class="typ">User</span>](ctx, db, q)
+<span class="kw">if</span> errors.<span class="fn">Is</span>(err, sql.ErrNoRows) {
+    <span class="cmt">// not found</span>
+}</code></pre>
+
+  <!-- ── FetchAll ──────────────────────────────────── -->
+
+  <h2 id="fetch-all">FetchAll[T]</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> <span class="fn">FetchAll</span>[<span class="typ">T</span> <span class="typ">any</span>](ctx <span class="typ">context.Context</span>, db *<span class="typ">DB</span>, b <span class="typ">Builder</span>) ([]<span class="typ">T</span>, <span class="typ">error</span>)</code>
+  </div>
+  <p>
+    Executes the query and scans all rows into a slice of <code>T</code>.
+    Returns an empty (nil) slice if no rows match.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"uuid"</span>, <span class="str">"name"</span>, <span class="str">"created"</span>).
+    <span class="fn">From</span>(<span class="str">"users"</span>).
+    <span class="fn">Where</span>(goqdsl.<span class="fn">Eq</span>(<span class="str">"active"</span>, <span class="kw">true</span>)).
+    <span class="fn">OrderBy</span>(<span class="str">"name"</span>, goqdsl.Asc).
+    <span class="fn">Limit</span>(50)
+
+users, err := goqdsl.<span class="fn">FetchAll</span>[<span class="typ">User</span>](ctx, db, q)
+<span class="kw">for</span> _, u := <span class="kw">range</span> users {
+    fmt.<span class="fn">Println</span>(u.Name)
+}</code></pre>
+
+  <!-- ── Struct tags ───────────────────────────────── -->
+
+  <h2 id="struct-tags">Struct Tag Convention</h2>
+
+  <p>
+    Both <code>FetchOne</code> and <code>FetchAll</code> map SQL columns
+    to struct fields using the <code>db</code> tag:
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Tag</th><th>Behavior</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>`db:"column_name"`</code></td>
+        <td>Maps the SQL column <code>column_name</code> to this field</td>
+      </tr>
+      <tr>
+        <td><code>`db:"-"`</code></td>
+        <td>Skip this field (never scanned)</td>
+      </tr>
+      <tr>
+        <td>(no tag)</td>
+        <td>Uses the Go field name as the column name</td>
+      </tr>
+    </tbody>
+  </table>
+
+<pre><code><span class="kw">type</span> <span class="typ">User</span> <span class="kw">struct</span> {
+    UUID      <span class="typ">string</span>    <span class="str">`db:"uuid"`</span>       <span class="cmt">// mapped to "uuid" column</span>
+    Name      <span class="typ">string</span>    <span class="str">`db:"name"`</span>       <span class="cmt">// mapped to "name" column</span>
+    Password  <span class="typ">string</span>    <span class="str">`db:"-"`</span>          <span class="cmt">// never scanned from DB</span>
+    CreatedAt <span class="typ">time.Time</span>                       <span class="cmt">// mapped to "CreatedAt" (field name)</span>
+}</code></pre>
+
+  <div class="note">
+    Columns returned by the query that don't match any struct field are
+    silently discarded. This means you can SELECT more columns than your
+    struct has fields without causing an error.
+  </div>
+
+  <!-- ── ToSQL ─────────────────────────────────────── -->
+
+  <h2 id="tosql">ToSQL (Debug Helper)</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> <span class="fn">ToSQL</span>(b <span class="typ">Builder</span>) <span class="typ">string</span></code>
+  </div>
+  <p>
+    Returns the SQL with parameter placeholders replaced by their
+    inlined values. Useful for logging and debugging. The output
+    is <strong>NOT safe for execution</strong> &mdash; always use
+    <code>Build()</code> for actual queries.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Select</span>(<span class="str">"*"</span>).<span class="fn">From</span>(<span class="str">"users"</span>).
+    <span class="fn">Where</span>(goqdsl.<span class="fn">Eq</span>(<span class="str">"name"</span>, <span class="str">"Alice"</span>), goqdsl.<span class="fn">Gt</span>(<span class="str">"age"</span>, 18)).
+    <span class="fn">Limit</span>(10)
+
+fmt.<span class="fn">Println</span>(goqdsl.<span class="fn">ToSQL</span>(q))</code></pre>
+
+  <p class="output-label">Output</p>
+  <div class="output">SELECT * FROM users WHERE name = 'Alice' AND age > 18 LIMIT 10</div>
+
+  <h3>Value formatting rules</h3>
+  <table>
+    <thead>
+      <tr><th>Go Type</th><th>SQL Output</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>string</code></td><td><code>'value'</code> (single-quoted, with <code>'</code> escaped)</td></tr>
+      <tr><td><code>bool</code></td><td><code>TRUE</code> / <code>FALSE</code></td></tr>
+      <tr><td><code>nil</code></td><td><code>NULL</code></td></tr>
+      <tr><td>numeric / other</td><td><code>fmt.Sprintf("%v", val)</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="warning">
+    <strong>Do not</strong> use <code>ToSQL</code> output to execute queries.
+    It does not properly escape all types and is vulnerable to injection.
+    Always use <code>Build()</code> which produces parameterized queries.
+  </div>
+
+  <!-- ── Full example ──────────────────────────────── -->
+
+  <h2 id="full-example">Full Example</h2>
+
+<pre><code><span class="kw">package</span> main
+
+<span class="kw">import</span> (
+    <span class="str">"context"</span>
+    <span class="str">"database/sql"</span>
+    <span class="str">"fmt"</span>
+    <span class="str">"log"</span>
+
+    _ <span class="str">"github.com/lib/pq"</span>
+    q <span class="str">"github.com/raugustinus/goqdsl/internal/goqdsl"</span>
+)
+
+<span class="kw">type</span> <span class="typ">Foo</span> <span class="kw">struct</span> {
+    UUID    <span class="typ">string</span> <span class="str">`db:"uuid"`</span>
+    Name    <span class="typ">string</span> <span class="str">`db:"name"`</span>
+}
+
+<span class="kw">func</span> <span class="fn">main</span>() {
+    sqlDB, _ := sql.<span class="fn">Open</span>(<span class="str">"postgres"</span>, <span class="str">"postgres://localhost/mydb"</span>)
+    db := q.<span class="fn">NewDB</span>(sqlDB)
+    ctx := context.<span class="fn">Background</span>()
+
+    <span class="cmt">// INSERT</span>
+    ins := q.<span class="fn">InsertInto</span>(<span class="str">"foo"</span>).<span class="fn">Columns</span>(<span class="str">"name"</span>).<span class="fn">Values</span>(<span class="str">"alice"</span>).<span class="fn">Returning</span>(<span class="str">"uuid"</span>, <span class="str">"name"</span>)
+    created, err := q.<span class="fn">FetchOne</span>[<span class="typ">Foo</span>](ctx, db, ins)
+    <span class="kw">if</span> err != <span class="kw">nil</span> { log.<span class="fn">Fatal</span>(err) }
+    fmt.<span class="fn">Println</span>(<span class="str">"Created:"</span>, created.UUID)
+
+    <span class="cmt">// SELECT</span>
+    sel := q.<span class="fn">Select</span>(<span class="str">"uuid"</span>, <span class="str">"name"</span>).<span class="fn">From</span>(<span class="str">"foo"</span>).<span class="fn">Where</span>(q.<span class="fn">IsNotNull</span>(<span class="str">"name"</span>))
+    all, err := q.<span class="fn">FetchAll</span>[<span class="typ">Foo</span>](ctx, db, sel)
+    <span class="kw">if</span> err != <span class="kw">nil</span> { log.<span class="fn">Fatal</span>(err) }
+    <span class="kw">for</span> _, f := <span class="kw">range</span> all {
+        fmt.<span class="fn">Println</span>(f.UUID, f.Name)
+    }
+
+    <span class="cmt">// UPDATE</span>
+    upd := q.<span class="fn">Update</span>(<span class="str">"foo"</span>).<span class="fn">Set</span>(<span class="str">"name"</span>, <span class="str">"bob"</span>).<span class="fn">Where</span>(q.<span class="fn">Eq</span>(<span class="str">"uuid"</span>, created.UUID))
+    _, err = db.<span class="fn">Exec</span>(ctx, upd)
+
+    <span class="cmt">// DELETE</span>
+    del := q.<span class="fn">DeleteFrom</span>(<span class="str">"foo"</span>).<span class="fn">Where</span>(q.<span class="fn">Eq</span>(<span class="str">"uuid"</span>, created.UUID))
+    _, err = db.<span class="fn">Exec</span>(ctx, del)
+}</code></pre>
+
+</main>
+</div>
+
+<footer class="site-footer">
+  GoQDSL &mdash; BSD 3-Clause License &mdash; &copy; 2024 Rob Augustinus
+</footer>
+
+</body>
+</html>

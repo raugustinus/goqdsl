@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UPDATE Builder — GoQDSL</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a href="index.html" class="logo">Go<span>QDSL</span></a>
+  <span class="tagline">Fluent SQL Query Builder for Go + PostgreSQL</span>
+</header>
+
+<div class="layout">
+
+<aside class="sidebar">
+  <nav>
+    <div class="nav-section">Getting Started</div>
+    <a href="index.html">Overview</a>
+    <div class="nav-section">Query Builders</div>
+    <a href="select.html">SELECT</a>
+    <a href="insert.html">INSERT</a>
+    <a href="update.html" class="active">UPDATE</a>
+    <a href="delete.html">DELETE</a>
+    <div class="nav-section">Core Concepts</div>
+    <a href="predicates.html">Predicates</a>
+    <a href="execution.html">Execution &amp; DB</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+  <h1>UPDATE Builder</h1>
+  <p class="lead">
+    Construct parameterized UPDATE statements with fluent SET
+    assignments, WHERE predicates, and PostgreSQL RETURNING support.
+  </p>
+
+  <!-- ── Update ────────────────────────────────────── -->
+
+  <h2 id="update">Update</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> <span class="fn">Update</span>(table <span class="typ">string</span>) *<span class="typ">UpdateBuilder</span></code>
+  </div>
+  <p>
+    Creates a new <code>UpdateBuilder</code> for the given table.
+    This is the entry point for building UPDATE statements.
+  </p>
+
+  <!-- ── Set ───────────────────────────────────────── -->
+
+  <h2 id="set">Set</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">UpdateBuilder</span>) <span class="fn">Set</span>(col <span class="typ">string</span>, val <span class="typ">any</span>) *<span class="typ">UpdateBuilder</span></code>
+  </div>
+  <p>
+    Adds a <code>column = $N</code> assignment to the SET clause.
+    Call multiple times for multiple columns. The order of SET
+    clauses matches the call order.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Update</span>(<span class="str">"users"</span>).
+    <span class="fn">Set</span>(<span class="str">"name"</span>, <span class="str">"Bob"</span>).
+    <span class="fn">Set</span>(<span class="str">"email"</span>, <span class="str">"bob@new.com"</span>).
+    <span class="fn">Where</span>(goqdsl.<span class="fn">Eq</span>(<span class="str">"uuid"</span>, <span class="str">"abc-123"</span>))
+
+sql, args := q.<span class="fn">Build</span>()</code></pre>
+
+  <p class="output-label">Output</p>
+  <div class="output">
+SQL:  UPDATE users SET name = $1, email = $2 WHERE uuid = $3
+Args: ["Bob", "bob@new.com", "abc-123"]
+  </div>
+
+  <!-- ── Where ─────────────────────────────────────── -->
+
+  <h2 id="where">Where</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">UpdateBuilder</span>) <span class="fn">Where</span>(preds ...<span class="typ">Predicate</span>) *<span class="typ">UpdateBuilder</span></code>
+  </div>
+  <p>
+    Appends <a href="predicates.html">predicates</a> to the WHERE clause
+    (ANDed together). Without a WHERE clause, the UPDATE applies to all rows.
+  </p>
+
+  <div class="warning">
+    An UPDATE without WHERE will modify every row in the table. GoQDSL
+    does not prevent this, but you should always include a WHERE clause
+    unless you intentionally want a full-table update.
+  </div>
+
+  <!-- ── Returning ─────────────────────────────────── -->
+
+  <h2 id="returning">Returning</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">UpdateBuilder</span>) <span class="fn">Returning</span>(cols ...<span class="typ">string</span>) *<span class="typ">UpdateBuilder</span></code>
+  </div>
+  <p>
+    Adds a RETURNING clause (PostgreSQL extension) to retrieve the
+    updated row values.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">Update</span>(<span class="str">"users"</span>).
+    <span class="fn">Set</span>(<span class="str">"active"</span>, <span class="kw">false</span>).
+    <span class="fn">Where</span>(goqdsl.<span class="fn">Eq</span>(<span class="str">"uuid"</span>, <span class="str">"abc"</span>)).
+    <span class="fn">Returning</span>(<span class="str">"uuid"</span>, <span class="str">"active"</span>)
+
+sql, args := q.<span class="fn">Build</span>()</code></pre>
+
+  <p class="output-label">Output</p>
+  <div class="output">
+SQL:  UPDATE users SET active = $1 WHERE uuid = $2 RETURNING uuid, active
+Args: [false, "abc"]
+  </div>
+
+  <!-- ── Build ─────────────────────────────────────── -->
+
+  <h2 id="build">Build</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">UpdateBuilder</span>) <span class="fn">Build</span>() (<span class="typ">string</span>, []<span class="typ">any</span>)</code>
+  </div>
+  <p>
+    Generates the parameterized SQL string and argument slice. Satisfies the
+    <a href="execution.html#builder">Builder</a> interface.
+  </p>
+
+  <h3>Placeholder ordering</h3>
+  <p>
+    SET values are numbered first, followed by WHERE predicate values.
+    In the example above: <code>$1</code> = <code>false</code> (SET),
+    <code>$2</code> = <code>"abc"</code> (WHERE).
+  </p>
+
+  <!-- ── Execution ─────────────────────────────────── -->
+
+  <h2 id="execution">Executing an UPDATE</h2>
+
+<pre><code>q := goqdsl.<span class="fn">Update</span>(<span class="str">"users"</span>).
+    <span class="fn">Set</span>(<span class="str">"name"</span>, <span class="str">"Charlie"</span>).
+    <span class="fn">Where</span>(goqdsl.<span class="fn">Eq</span>(<span class="str">"uuid"</span>, id)).
+    <span class="fn">Returning</span>(<span class="str">"uuid"</span>, <span class="str">"name"</span>)
+
+<span class="cmt">// Execute and scan the returned row</span>
+user, err := goqdsl.<span class="fn">FetchOne</span>[<span class="typ">User</span>](ctx, db, q)
+
+<span class="cmt">// Or execute without scanning</span>
+result, err := db.<span class="fn">Exec</span>(ctx, q)
+rowsAffected, _ := result.<span class="fn">RowsAffected</span>()</code></pre>
+
+</main>
+</div>
+
+<footer class="site-footer">
+  GoQDSL &mdash; BSD 3-Clause License &mdash; &copy; 2024 Rob Augustinus
+</footer>
+
+</body>
+</html>

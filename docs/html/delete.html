@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DELETE Builder — GoQDSL</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a href="index.html" class="logo">Go<span>QDSL</span></a>
+  <span class="tagline">Fluent SQL Query Builder for Go + PostgreSQL</span>
+</header>
+
+<div class="layout">
+
+<aside class="sidebar">
+  <nav>
+    <div class="nav-section">Getting Started</div>
+    <a href="index.html">Overview</a>
+    <div class="nav-section">Query Builders</div>
+    <a href="select.html">SELECT</a>
+    <a href="insert.html">INSERT</a>
+    <a href="update.html">UPDATE</a>
+    <a href="delete.html" class="active">DELETE</a>
+    <div class="nav-section">Core Concepts</div>
+    <a href="predicates.html">Predicates</a>
+    <a href="execution.html">Execution &amp; DB</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+  <h1>DELETE Builder</h1>
+  <p class="lead">
+    Construct parameterized DELETE statements with WHERE predicates
+    and PostgreSQL RETURNING support.
+  </p>
+
+  <!-- ── DeleteFrom ────────────────────────────────── -->
+
+  <h2 id="delete-from">DeleteFrom</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> <span class="fn">DeleteFrom</span>(table <span class="typ">string</span>) *<span class="typ">DeleteBuilder</span></code>
+  </div>
+  <p>
+    Creates a new <code>DeleteBuilder</code> for the given table.
+    This is the entry point for building DELETE statements.
+  </p>
+
+  <!-- ── Where ─────────────────────────────────────── -->
+
+  <h2 id="where">Where</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">DeleteBuilder</span>) <span class="fn">Where</span>(preds ...<span class="typ">Predicate</span>) *<span class="typ">DeleteBuilder</span></code>
+  </div>
+  <p>
+    Appends <a href="predicates.html">predicates</a> to the WHERE clause
+    (ANDed together).
+  </p>
+
+  <div class="warning">
+    A DELETE without WHERE will delete every row in the table. GoQDSL does
+    not prevent this, but you should always include a WHERE clause unless
+    you intentionally want to truncate the table.
+  </div>
+
+<pre><code>q := goqdsl.<span class="fn">DeleteFrom</span>(<span class="str">"users"</span>).
+    <span class="fn">Where</span>(goqdsl.<span class="fn">Eq</span>(<span class="str">"uuid"</span>, <span class="str">"abc-123"</span>))
+
+sql, args := q.<span class="fn">Build</span>()</code></pre>
+
+  <p class="output-label">Output</p>
+  <div class="output">
+SQL:  DELETE FROM users WHERE uuid = $1
+Args: ["abc-123"]
+  </div>
+
+  <h3>Complex WHERE</h3>
+  <p>
+    You can use any <a href="predicates.html">predicate</a>, including
+    logical combinators:
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">DeleteFrom</span>(<span class="str">"sessions"</span>).
+    <span class="fn">Where</span>(
+        goqdsl.<span class="fn">Lt</span>(<span class="str">"expires_at"</span>, <span class="str">"now()"</span>),
+        goqdsl.<span class="fn">Eq</span>(<span class="str">"active"</span>, <span class="kw">false</span>),
+    )
+
+<span class="cmt">// DELETE FROM sessions WHERE expires_at < $1 AND active = $2</span></code></pre>
+
+  <!-- ── Returning ─────────────────────────────────── -->
+
+  <h2 id="returning">Returning</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">DeleteBuilder</span>) <span class="fn">Returning</span>(cols ...<span class="typ">string</span>) *<span class="typ">DeleteBuilder</span></code>
+  </div>
+  <p>
+    Adds a RETURNING clause (PostgreSQL extension) to retrieve the
+    deleted row values.
+  </p>
+
+<pre><code>q := goqdsl.<span class="fn">DeleteFrom</span>(<span class="str">"sessions"</span>).
+    <span class="fn">Where</span>(goqdsl.<span class="fn">Lt</span>(<span class="str">"expires_at"</span>, <span class="str">"now()"</span>)).
+    <span class="fn">Returning</span>(<span class="str">"user_id"</span>)
+
+sql, args := q.<span class="fn">Build</span>()</code></pre>
+
+  <p class="output-label">Output</p>
+  <div class="output">
+SQL:  DELETE FROM sessions WHERE expires_at < $1 RETURNING user_id
+Args: ["now()"]
+  </div>
+
+  <!-- ── Build ─────────────────────────────────────── -->
+
+  <h2 id="build">Build</h2>
+  <div class="sig">
+    <code><span class="kw">func</span> (b *<span class="typ">DeleteBuilder</span>) <span class="fn">Build</span>() (<span class="typ">string</span>, []<span class="typ">any</span>)</code>
+  </div>
+  <p>
+    Generates the parameterized SQL string and argument slice. Satisfies the
+    <a href="execution.html#builder">Builder</a> interface.
+  </p>
+
+  <!-- ── No WHERE ──────────────────────────────────── -->
+
+  <h2 id="no-where">DELETE without WHERE</h2>
+  <p>
+    A bare <code>DeleteFrom</code> with no <code>Where</code> will generate
+    an unfiltered DELETE:
+  </p>
+
+<pre><code>sql, args := goqdsl.<span class="fn">DeleteFrom</span>(<span class="str">"temp_data"</span>).<span class="fn">Build</span>()
+<span class="cmt">// SQL:  DELETE FROM temp_data</span>
+<span class="cmt">// Args: []</span></code></pre>
+
+  <!-- ── Execution ─────────────────────────────────── -->
+
+  <h2 id="execution">Executing a DELETE</h2>
+
+<pre><code>q := goqdsl.<span class="fn">DeleteFrom</span>(<span class="str">"users"</span>).
+    <span class="fn">Where</span>(goqdsl.<span class="fn">Eq</span>(<span class="str">"uuid"</span>, id)).
+    <span class="fn">Returning</span>(<span class="str">"uuid"</span>, <span class="str">"name"</span>)
+
+<span class="cmt">// Scan the deleted row</span>
+deleted, err := goqdsl.<span class="fn">FetchOne</span>[<span class="typ">User</span>](ctx, db, q)
+
+<span class="cmt">// Or just execute</span>
+result, err := db.<span class="fn">Exec</span>(ctx, q)
+rowsAffected, _ := result.<span class="fn">RowsAffected</span>()</code></pre>
+
+</main>
+</div>
+
+<footer class="site-footer">
+  GoQDSL &mdash; BSD 3-Clause License &mdash; &copy; 2024 Rob Augustinus
+</footer>
+
+</body>
+</html>
