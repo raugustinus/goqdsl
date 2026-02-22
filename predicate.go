@@ -2,39 +2,45 @@ package goqdsl
 
 import (
 	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
 )
 
 // Predicate represents a SQL condition that can render itself as a
-// parameterized SQL fragment. The offset parameter indicates the next
-// available placeholder number ($1, $2, ...) and the method returns the
-// SQL fragment, the arguments consumed, and the new offset.
+// parameterized SQL fragment using named parameters (@name).
+// The counter is used to generate unique parameter names (p1, p2, ...).
 type Predicate interface {
-	ToSQL(offset int) (sql string, args []any, newOffset int)
+	ToSQL(counter *int) (sql string, args map[string]any)
+}
+
+// mergeArgs copies all entries from src into dst.
+func mergeArgs(dst, src map[string]any) {
+	for k, v := range src {
+		dst[k] = v
+	}
+}
+
+// nextParam increments the counter and returns the next parameter name.
+func nextParam(counter *int) string {
+	*counter++
+	return fmt.Sprintf("p%d", *counter)
 }
 
 // --- raw predicate ---
 
-var placeholderRe = regexp.MustCompile(`\$(\d+)`)
-
 type rawPred struct {
 	sql  string
-	args []any
+	args map[string]any
 }
 
-// Raw creates a predicate from a raw SQL fragment with positional parameters.
-// The $1, $2, ... placeholders are re-numbered to fit the current offset.
-// Example: Raw("EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2)", userID, targetID)
-func Raw(sql string, args ...any) Predicate { return rawPred{sql, args} }
+// Raw creates a predicate from a raw SQL fragment with named parameters.
+// Example: Raw("EXISTS(SELECT 1 FROM follows WHERE follower_id = @uid AND following_id = @tid)", map[string]any{"uid": userID, "tid": targetID})
+func Raw(sql string, args map[string]any) Predicate { return rawPred{sql, args} }
 
-func (p rawPred) ToSQL(offset int) (string, []any, int) {
-	result := placeholderRe.ReplaceAllStringFunc(p.sql, func(match string) string {
-		n, _ := strconv.Atoi(match[1:])
-		return fmt.Sprintf("$%d", n+offset-1)
-	})
-	return result, p.args, offset + len(p.args)
+func (p rawPred) ToSQL(counter *int) (string, map[string]any) {
+	if p.args == nil {
+		return p.sql, nil
+	}
+	return p.sql, p.args
 }
 
 // --- comparison predicates ---
@@ -44,11 +50,12 @@ type eqPred struct {
 	val any
 }
 
-// Eq creates a column = $N predicate.
+// Eq creates a column = @name predicate.
 func Eq(col string, val any) Predicate { return eqPred{col, val} }
 
-func (p eqPred) ToSQL(offset int) (string, []any, int) {
-	return fmt.Sprintf("%s = $%d", p.col, offset), []any{p.val}, offset + 1
+func (p eqPred) ToSQL(counter *int) (string, map[string]any) {
+	name := nextParam(counter)
+	return fmt.Sprintf("%s = @%s", p.col, name), map[string]any{name: p.val}
 }
 
 type neqPred struct {
@@ -56,11 +63,12 @@ type neqPred struct {
 	val any
 }
 
-// Neq creates a column != $N predicate.
+// Neq creates a column != @name predicate.
 func Neq(col string, val any) Predicate { return neqPred{col, val} }
 
-func (p neqPred) ToSQL(offset int) (string, []any, int) {
-	return fmt.Sprintf("%s != $%d", p.col, offset), []any{p.val}, offset + 1
+func (p neqPred) ToSQL(counter *int) (string, map[string]any) {
+	name := nextParam(counter)
+	return fmt.Sprintf("%s != @%s", p.col, name), map[string]any{name: p.val}
 }
 
 type gtPred struct {
@@ -68,11 +76,12 @@ type gtPred struct {
 	val any
 }
 
-// Gt creates a column > $N predicate.
+// Gt creates a column > @name predicate.
 func Gt(col string, val any) Predicate { return gtPred{col, val} }
 
-func (p gtPred) ToSQL(offset int) (string, []any, int) {
-	return fmt.Sprintf("%s > $%d", p.col, offset), []any{p.val}, offset + 1
+func (p gtPred) ToSQL(counter *int) (string, map[string]any) {
+	name := nextParam(counter)
+	return fmt.Sprintf("%s > @%s", p.col, name), map[string]any{name: p.val}
 }
 
 type gtePred struct {
@@ -80,11 +89,12 @@ type gtePred struct {
 	val any
 }
 
-// Gte creates a column >= $N predicate.
+// Gte creates a column >= @name predicate.
 func Gte(col string, val any) Predicate { return gtePred{col, val} }
 
-func (p gtePred) ToSQL(offset int) (string, []any, int) {
-	return fmt.Sprintf("%s >= $%d", p.col, offset), []any{p.val}, offset + 1
+func (p gtePred) ToSQL(counter *int) (string, map[string]any) {
+	name := nextParam(counter)
+	return fmt.Sprintf("%s >= @%s", p.col, name), map[string]any{name: p.val}
 }
 
 type ltPred struct {
@@ -92,11 +102,12 @@ type ltPred struct {
 	val any
 }
 
-// Lt creates a column < $N predicate.
+// Lt creates a column < @name predicate.
 func Lt(col string, val any) Predicate { return ltPred{col, val} }
 
-func (p ltPred) ToSQL(offset int) (string, []any, int) {
-	return fmt.Sprintf("%s < $%d", p.col, offset), []any{p.val}, offset + 1
+func (p ltPred) ToSQL(counter *int) (string, map[string]any) {
+	name := nextParam(counter)
+	return fmt.Sprintf("%s < @%s", p.col, name), map[string]any{name: p.val}
 }
 
 type ltePred struct {
@@ -104,11 +115,12 @@ type ltePred struct {
 	val any
 }
 
-// Lte creates a column <= $N predicate.
+// Lte creates a column <= @name predicate.
 func Lte(col string, val any) Predicate { return ltePred{col, val} }
 
-func (p ltePred) ToSQL(offset int) (string, []any, int) {
-	return fmt.Sprintf("%s <= $%d", p.col, offset), []any{p.val}, offset + 1
+func (p ltePred) ToSQL(counter *int) (string, map[string]any) {
+	name := nextParam(counter)
+	return fmt.Sprintf("%s <= @%s", p.col, name), map[string]any{name: p.val}
 }
 
 // --- pattern predicates ---
@@ -118,11 +130,12 @@ type likePred struct {
 	pattern string
 }
 
-// Like creates a column LIKE $N predicate.
+// Like creates a column LIKE @name predicate.
 func Like(col string, pattern string) Predicate { return likePred{col, pattern} }
 
-func (p likePred) ToSQL(offset int) (string, []any, int) {
-	return fmt.Sprintf("%s LIKE $%d", p.col, offset), []any{p.pattern}, offset + 1
+func (p likePred) ToSQL(counter *int) (string, map[string]any) {
+	name := nextParam(counter)
+	return fmt.Sprintf("%s LIKE @%s", p.col, name), map[string]any{name: p.pattern}
 }
 
 type ilikePred struct {
@@ -130,11 +143,12 @@ type ilikePred struct {
 	pattern string
 }
 
-// ILike creates a column ILIKE $N predicate (case-insensitive, PostgreSQL extension).
+// ILike creates a column ILIKE @name predicate (case-insensitive, PostgreSQL extension).
 func ILike(col string, pattern string) Predicate { return ilikePred{col, pattern} }
 
-func (p ilikePred) ToSQL(offset int) (string, []any, int) {
-	return fmt.Sprintf("%s ILIKE $%d", p.col, offset), []any{p.pattern}, offset + 1
+func (p ilikePred) ToSQL(counter *int) (string, map[string]any) {
+	name := nextParam(counter)
+	return fmt.Sprintf("%s ILIKE @%s", p.col, name), map[string]any{name: p.pattern}
 }
 
 // --- set predicates ---
@@ -144,16 +158,19 @@ type inPred struct {
 	vals []any
 }
 
-// In creates a column IN ($N, $N+1, ...) predicate.
+// In creates a column IN (@name1, @name2, ...) predicate.
 func In(col string, vals ...any) Predicate { return inPred{col, vals} }
 
-func (p inPred) ToSQL(offset int) (string, []any, int) {
+func (p inPred) ToSQL(counter *int) (string, map[string]any) {
+	args := make(map[string]any, len(p.vals))
 	placeholders := make([]string, len(p.vals))
-	for i := range p.vals {
-		placeholders[i] = fmt.Sprintf("$%d", offset+i)
+	for i, v := range p.vals {
+		name := nextParam(counter)
+		placeholders[i] = "@" + name
+		args[name] = v
 	}
 	sql := fmt.Sprintf("%s IN (%s)", p.col, strings.Join(placeholders, ", "))
-	return sql, p.vals, offset + len(p.vals)
+	return sql, args
 }
 
 type betweenPred struct {
@@ -162,12 +179,14 @@ type betweenPred struct {
 	high any
 }
 
-// Between creates a column BETWEEN $N AND $N+1 predicate.
+// Between creates a column BETWEEN @low AND @high predicate.
 func Between(col string, low, high any) Predicate { return betweenPred{col, low, high} }
 
-func (p betweenPred) ToSQL(offset int) (string, []any, int) {
-	sql := fmt.Sprintf("%s BETWEEN $%d AND $%d", p.col, offset, offset+1)
-	return sql, []any{p.low, p.high}, offset + 2
+func (p betweenPred) ToSQL(counter *int) (string, map[string]any) {
+	lowName := nextParam(counter)
+	highName := nextParam(counter)
+	sql := fmt.Sprintf("%s BETWEEN @%s AND @%s", p.col, lowName, highName)
+	return sql, map[string]any{lowName: p.low, highName: p.high}
 }
 
 // --- null predicates ---
@@ -179,8 +198,8 @@ type isNullPred struct {
 // IsNull creates a column IS NULL predicate.
 func IsNull(col string) Predicate { return isNullPred{col} }
 
-func (p isNullPred) ToSQL(offset int) (string, []any, int) {
-	return fmt.Sprintf("%s IS NULL", p.col), nil, offset
+func (p isNullPred) ToSQL(counter *int) (string, map[string]any) {
+	return fmt.Sprintf("%s IS NULL", p.col), nil
 }
 
 type isNotNullPred struct {
@@ -190,8 +209,8 @@ type isNotNullPred struct {
 // IsNotNull creates a column IS NOT NULL predicate.
 func IsNotNull(col string) Predicate { return isNotNullPred{col} }
 
-func (p isNotNullPred) ToSQL(offset int) (string, []any, int) {
-	return fmt.Sprintf("%s IS NOT NULL", p.col), nil, offset
+func (p isNotNullPred) ToSQL(counter *int) (string, map[string]any) {
+	return fmt.Sprintf("%s IS NOT NULL", p.col), nil
 }
 
 // --- logical combinators ---
@@ -203,8 +222,8 @@ type andPred struct {
 // And combines multiple predicates with AND.
 func And(preds ...Predicate) Predicate { return andPred{preds} }
 
-func (p andPred) ToSQL(offset int) (string, []any, int) {
-	return combinePredicates(p.preds, "AND", offset)
+func (p andPred) ToSQL(counter *int) (string, map[string]any) {
+	return combinePredicates(p.preds, "AND", counter)
 }
 
 type orPred struct {
@@ -214,8 +233,8 @@ type orPred struct {
 // Or combines multiple predicates with OR. The result is wrapped in parentheses.
 func Or(preds ...Predicate) Predicate { return orPred{preds} }
 
-func (p orPred) ToSQL(offset int) (string, []any, int) {
-	return combinePredicates(p.preds, "OR", offset)
+func (p orPred) ToSQL(counter *int) (string, map[string]any) {
+	return combinePredicates(p.preds, "OR", counter)
 }
 
 type notPred struct {
@@ -225,31 +244,29 @@ type notPred struct {
 // Not negates a predicate.
 func Not(pred Predicate) Predicate { return notPred{pred} }
 
-func (p notPred) ToSQL(offset int) (string, []any, int) {
-	sql, args, newOffset := p.pred.ToSQL(offset)
-	return fmt.Sprintf("NOT (%s)", sql), args, newOffset
+func (p notPred) ToSQL(counter *int) (string, map[string]any) {
+	sql, args := p.pred.ToSQL(counter)
+	return fmt.Sprintf("NOT (%s)", sql), args
 }
 
 // combinePredicates joins a slice of predicates with the given operator.
-func combinePredicates(preds []Predicate, op string, offset int) (string, []any, int) {
+func combinePredicates(preds []Predicate, op string, counter *int) (string, map[string]any) {
 	if len(preds) == 0 {
-		return "", nil, offset
+		return "", nil
 	}
 	if len(preds) == 1 {
-		return preds[0].ToSQL(offset)
+		return preds[0].ToSQL(counter)
 	}
 
 	parts := make([]string, 0, len(preds))
-	var allArgs []any
-	cur := offset
+	allArgs := make(map[string]any)
 
 	for _, p := range preds {
-		sql, args, next := p.ToSQL(cur)
+		sql, args := p.ToSQL(counter)
 		parts = append(parts, sql)
-		allArgs = append(allArgs, args...)
-		cur = next
+		mergeArgs(allArgs, args)
 	}
 
 	joined := strings.Join(parts, " "+op+" ")
-	return "(" + joined + ")", allArgs, cur
+	return "(" + joined + ")", allArgs
 }

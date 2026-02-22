@@ -42,27 +42,27 @@ func (b *UpdateBuilder) Returning(cols ...string) *UpdateBuilder {
 	return b
 }
 
-// Build generates the parameterized SQL string and its arguments.
-func (b *UpdateBuilder) Build() (string, []any) {
+// Build generates the SQL string with @name placeholders and a map of named arguments.
+func (b *UpdateBuilder) Build() (string, map[string]any) {
 	var sb strings.Builder
-	var args []any
-	offset := 1
+	args := make(map[string]any)
+	counter := 0
 
 	fmt.Fprintf(&sb, "UPDATE %s SET ", b.table)
 
 	// SET clauses
 	setParts := make([]string, len(b.sets))
 	for i, s := range b.sets {
-		setParts[i] = fmt.Sprintf("%s = $%d", s.col, offset)
-		args = append(args, s.val)
-		offset++
+		name := nextParam(&counter)
+		setParts[i] = fmt.Sprintf("%s = @%s", s.col, name)
+		args[name] = s.val
 	}
 	sb.WriteString(strings.Join(setParts, ", "))
 
 	// WHERE
 	if len(b.where) > 0 {
 		sb.WriteString(" WHERE ")
-		offset, args = writePredicates(&sb, b.where, offset, args)
+		writePredicates(&sb, b.where, &counter, args)
 	}
 
 	// RETURNING

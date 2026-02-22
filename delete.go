@@ -29,18 +29,18 @@ func (b *DeleteBuilder) Returning(cols ...string) *DeleteBuilder {
 	return b
 }
 
-// Build generates the parameterized SQL string and its arguments.
-func (b *DeleteBuilder) Build() (string, []any) {
+// Build generates the SQL string with @name placeholders and a map of named arguments.
+func (b *DeleteBuilder) Build() (string, map[string]any) {
 	var sb strings.Builder
-	var args []any
-	offset := 1
+	args := make(map[string]any)
+	counter := 0
 
 	fmt.Fprintf(&sb, "DELETE FROM %s", b.table)
 
 	// WHERE
 	if len(b.where) > 0 {
 		sb.WriteString(" WHERE ")
-		offset, args = writePredicates(&sb, b.where, offset, args)
+		writePredicates(&sb, b.where, &counter, args)
 	}
 
 	// RETURNING

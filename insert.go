@@ -45,11 +45,11 @@ func (b *InsertBuilder) Returning(cols ...string) *InsertBuilder {
 	return b
 }
 
-// Build generates the parameterized SQL string and its arguments.
-func (b *InsertBuilder) Build() (string, []any) {
+// Build generates the SQL string with @name placeholders and a map of named arguments.
+func (b *InsertBuilder) Build() (string, map[string]any) {
 	var sb strings.Builder
-	var args []any
-	offset := 1
+	args := make(map[string]any)
+	counter := 0
 
 	fmt.Fprintf(&sb, "INSERT INTO %s", b.table)
 
@@ -68,9 +68,9 @@ func (b *InsertBuilder) Build() (string, []any) {
 		}
 		placeholders := make([]string, len(row))
 		for j, v := range row {
-			placeholders[j] = fmt.Sprintf("$%d", offset)
-			args = append(args, v)
-			offset++
+			name := nextParam(&counter)
+			placeholders[j] = "@" + name
+			args[name] = v
 		}
 		sb.WriteString("(")
 		sb.WriteString(strings.Join(placeholders, ", "))

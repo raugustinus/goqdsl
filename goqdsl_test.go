@@ -27,8 +27,8 @@ func TestSelectWithWhere(t *testing.T) {
 		Where(Eq("uuid", "abc-123")).
 		Build()
 
-	wantSQL := "SELECT uuid, name FROM alerts WHERE uuid = $1"
-	wantArgs := []any{"abc-123"}
+	wantSQL := "SELECT uuid, name FROM alerts WHERE uuid = @p1"
+	wantArgs := map[string]any{"p1": "abc-123"}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -56,8 +56,8 @@ func TestSelectMultipleWhere(t *testing.T) {
 		Where(Eq("active", true), Gt("age", 18)).
 		Build()
 
-	wantSQL := "SELECT * FROM users WHERE active = $1 AND age > $2"
-	wantArgs := []any{true, 18}
+	wantSQL := "SELECT * FROM users WHERE active = @p1 AND age > @p2"
+	wantArgs := map[string]any{"p1": true, "p2": 18}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -74,8 +74,8 @@ func TestSelectWithInnerJoin(t *testing.T) {
 		Where(Eq("a.active", true)).
 		Build()
 
-	wantSQL := "SELECT a.uuid, b.name FROM alerts a INNER JOIN users b ON a.user_id = b.uuid WHERE a.active = $1"
-	wantArgs := []any{true}
+	wantSQL := "SELECT a.uuid, b.name FROM alerts a INNER JOIN users b ON a.user_id = b.uuid WHERE a.active = @p1"
+	wantArgs := map[string]any{"p1": true}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -141,8 +141,8 @@ func TestSelectGroupBy(t *testing.T) {
 		Having(Gt("COUNT(*)", 5)).
 		Build()
 
-	wantSQL := "SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > $1"
-	wantArgs := []any{5}
+	wantSQL := "SELECT department, COUNT(*) FROM employees GROUP BY department HAVING COUNT(*) > @p1"
+	wantArgs := map[string]any{"p1": 5}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -173,8 +173,8 @@ func TestSelectLimitOffset(t *testing.T) {
 		Offset(40).
 		Build()
 
-	wantSQL := "SELECT * FROM logs ORDER BY created DESC LIMIT $1 OFFSET $2"
-	wantArgs := []any{20, 40}
+	wantSQL := "SELECT * FROM logs ORDER BY created DESC LIMIT @p1 OFFSET @p2"
+	wantArgs := map[string]any{"p1": 20, "p2": 40}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -197,12 +197,12 @@ func TestSelectComplex(t *testing.T) {
 
 	wantSQL := "SELECT u.name, COUNT(o.id) AS order_count FROM users u " +
 		"INNER JOIN orders o ON u.id = o.user_id " +
-		"WHERE u.active = $1 AND o.total >= $2 " +
+		"WHERE u.active = @p1 AND o.total >= @p2 " +
 		"GROUP BY u.name " +
-		"HAVING COUNT(o.id) > $3 " +
+		"HAVING COUNT(o.id) > @p3 " +
 		"ORDER BY order_count DESC " +
-		"LIMIT $4"
-	wantArgs := []any{true, 100, 2, 10}
+		"LIMIT @p4"
+	wantArgs := map[string]any{"p1": true, "p2": 100, "p3": 2, "p4": 10}
 
 	if sql != wantSQL {
 		t.Errorf("sql =\n  %q\nwant\n  %q", sql, wantSQL)
@@ -226,8 +226,8 @@ func TestInsertSingleRow(t *testing.T) {
 		Values("Alice", "alice@example.com").
 		Build()
 
-	wantSQL := "INSERT INTO users (name, email) VALUES ($1, $2)"
-	wantArgs := []any{"Alice", "alice@example.com"}
+	wantSQL := "INSERT INTO users (name, email) VALUES (@p1, @p2)"
+	wantArgs := map[string]any{"p1": "Alice", "p2": "alice@example.com"}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -244,8 +244,8 @@ func TestInsertMultipleRows(t *testing.T) {
 		Values("Bob", "bob@example.com").
 		Build()
 
-	wantSQL := "INSERT INTO users (name, email) VALUES ($1, $2), ($3, $4)"
-	wantArgs := []any{"Alice", "alice@example.com", "Bob", "bob@example.com"}
+	wantSQL := "INSERT INTO users (name, email) VALUES (@p1, @p2), (@p3, @p4)"
+	wantArgs := map[string]any{"p1": "Alice", "p2": "alice@example.com", "p3": "Bob", "p4": "bob@example.com"}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -262,8 +262,8 @@ func TestInsertReturning(t *testing.T) {
 		Returning("uuid", "created").
 		Build()
 
-	wantSQL := "INSERT INTO users (name) VALUES ($1) RETURNING uuid, created"
-	wantArgs := []any{"Alice"}
+	wantSQL := "INSERT INTO users (name) VALUES (@p1) RETURNING uuid, created"
+	wantArgs := map[string]any{"p1": "Alice"}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -286,8 +286,8 @@ func TestUpdateSimple(t *testing.T) {
 		Where(Eq("uuid", "abc-123")).
 		Build()
 
-	wantSQL := "UPDATE users SET name = $1, email = $2 WHERE uuid = $3"
-	wantArgs := []any{"Bob", "bob@new.com", "abc-123"}
+	wantSQL := "UPDATE users SET name = @p1, email = @p2 WHERE uuid = @p3"
+	wantArgs := map[string]any{"p1": "Bob", "p2": "bob@new.com", "p3": "abc-123"}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -304,8 +304,8 @@ func TestUpdateReturning(t *testing.T) {
 		Returning("uuid", "active").
 		Build()
 
-	wantSQL := "UPDATE users SET active = $1 WHERE uuid = $2 RETURNING uuid, active"
-	wantArgs := []any{false, "abc"}
+	wantSQL := "UPDATE users SET active = @p1 WHERE uuid = @p2 RETURNING uuid, active"
+	wantArgs := map[string]any{"p1": false, "p2": "abc"}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -326,8 +326,8 @@ func TestDeleteSimple(t *testing.T) {
 		Where(Eq("uuid", "abc-123")).
 		Build()
 
-	wantSQL := "DELETE FROM users WHERE uuid = $1"
-	wantArgs := []any{"abc-123"}
+	wantSQL := "DELETE FROM users WHERE uuid = @p1"
+	wantArgs := map[string]any{"p1": "abc-123"}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -343,7 +343,7 @@ func TestDeleteReturning(t *testing.T) {
 		Returning("user_id").
 		Build()
 
-	wantSQL := "DELETE FROM sessions WHERE expires_at < $1 RETURNING user_id"
+	wantSQL := "DELETE FROM sessions WHERE expires_at < @p1 RETURNING user_id"
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
 	}
@@ -368,65 +368,74 @@ func TestDeleteImplementsBuilder(t *testing.T) {
 // ---------- Predicates ----------
 
 func TestPredicateEq(t *testing.T) {
-	sql, args, off := Eq("name", "Alice").ToSQL(1)
-	if sql != "name = $1" || args[0] != "Alice" || off != 2 {
-		t.Errorf("Eq: sql=%q args=%v off=%d", sql, args, off)
+	c := 0
+	sql, args := Eq("name", "Alice").ToSQL(&c)
+	if sql != "name = @p1" || args["p1"] != "Alice" || c != 1 {
+		t.Errorf("Eq: sql=%q args=%v c=%d", sql, args, c)
 	}
 }
 
 func TestPredicateNeq(t *testing.T) {
-	sql, args, off := Neq("status", "deleted").ToSQL(3)
-	if sql != "status != $3" || args[0] != "deleted" || off != 4 {
-		t.Errorf("Neq: sql=%q args=%v off=%d", sql, args, off)
+	c := 2
+	sql, args := Neq("status", "deleted").ToSQL(&c)
+	if sql != "status != @p3" || args["p3"] != "deleted" || c != 3 {
+		t.Errorf("Neq: sql=%q args=%v c=%d", sql, args, c)
 	}
 }
 
 func TestPredicateGt(t *testing.T) {
-	sql, args, off := Gt("age", 18).ToSQL(1)
-	if sql != "age > $1" || args[0] != 18 || off != 2 {
-		t.Errorf("Gt: sql=%q args=%v off=%d", sql, args, off)
+	c := 0
+	sql, args := Gt("age", 18).ToSQL(&c)
+	if sql != "age > @p1" || args["p1"] != 18 || c != 1 {
+		t.Errorf("Gt: sql=%q args=%v c=%d", sql, args, c)
 	}
 }
 
 func TestPredicateGte(t *testing.T) {
-	sql, _, _ := Gte("score", 90).ToSQL(1)
-	if sql != "score >= $1" {
+	c := 0
+	sql, _ := Gte("score", 90).ToSQL(&c)
+	if sql != "score >= @p1" {
 		t.Errorf("Gte: sql=%q", sql)
 	}
 }
 
 func TestPredicateLt(t *testing.T) {
-	sql, _, _ := Lt("price", 50).ToSQL(1)
-	if sql != "price < $1" {
+	c := 0
+	sql, _ := Lt("price", 50).ToSQL(&c)
+	if sql != "price < @p1" {
 		t.Errorf("Lt: sql=%q", sql)
 	}
 }
 
 func TestPredicateLte(t *testing.T) {
-	sql, _, _ := Lte("qty", 0).ToSQL(1)
-	if sql != "qty <= $1" {
+	c := 0
+	sql, _ := Lte("qty", 0).ToSQL(&c)
+	if sql != "qty <= @p1" {
 		t.Errorf("Lte: sql=%q", sql)
 	}
 }
 
 func TestPredicateLike(t *testing.T) {
-	sql, args, _ := Like("name", "%alice%").ToSQL(1)
-	if sql != "name LIKE $1" || args[0] != "%alice%" {
+	c := 0
+	sql, args := Like("name", "%alice%").ToSQL(&c)
+	if sql != "name LIKE @p1" || args["p1"] != "%alice%" {
 		t.Errorf("Like: sql=%q args=%v", sql, args)
 	}
 }
 
 func TestPredicateILike(t *testing.T) {
-	sql, _, _ := ILike("name", "%bob%").ToSQL(1)
-	if sql != "name ILIKE $1" {
+	c := 0
+	sql, _ := ILike("name", "%bob%").ToSQL(&c)
+	if sql != "name ILIKE @p1" {
 		t.Errorf("ILike: sql=%q", sql)
 	}
 }
 
 func TestPredicateIn(t *testing.T) {
-	sql, args, off := In("status", "active", "pending", "review").ToSQL(1)
-	wantSQL := "status IN ($1, $2, $3)"
-	wantArgs := []any{"active", "pending", "review"}
+	c := 0
+	sql, args := In("status", "active", "pending", "review").ToSQL(&c)
+	wantSQL := "status IN (@p1, @p2, @p3)"
+	wantArgs := map[string]any{"p1": "active", "p2": "pending", "p3": "review"}
 
 	if sql != wantSQL {
 		t.Errorf("In: sql=%q, want %q", sql, wantSQL)
@@ -434,42 +443,46 @@ func TestPredicateIn(t *testing.T) {
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Errorf("In: args=%v, want %v", args, wantArgs)
 	}
-	if off != 4 {
-		t.Errorf("In: off=%d, want 4", off)
+	if c != 3 {
+		t.Errorf("In: c=%d, want 3", c)
 	}
 }
 
 func TestPredicateBetween(t *testing.T) {
-	sql, args, off := Between("age", 18, 65).ToSQL(1)
-	if sql != "age BETWEEN $1 AND $2" {
+	c := 0
+	sql, args := Between("age", 18, 65).ToSQL(&c)
+	if sql != "age BETWEEN @p1 AND @p2" {
 		t.Errorf("Between: sql=%q", sql)
 	}
-	if !reflect.DeepEqual(args, []any{18, 65}) {
+	if !reflect.DeepEqual(args, map[string]any{"p1": 18, "p2": 65}) {
 		t.Errorf("Between: args=%v", args)
 	}
-	if off != 3 {
-		t.Errorf("Between: off=%d", off)
+	if c != 2 {
+		t.Errorf("Between: c=%d", c)
 	}
 }
 
 func TestPredicateIsNull(t *testing.T) {
-	sql, args, off := IsNull("deleted_at").ToSQL(5)
-	if sql != "deleted_at IS NULL" || args != nil || off != 5 {
-		t.Errorf("IsNull: sql=%q args=%v off=%d", sql, args, off)
+	c := 4
+	sql, args := IsNull("deleted_at").ToSQL(&c)
+	if sql != "deleted_at IS NULL" || args != nil || c != 4 {
+		t.Errorf("IsNull: sql=%q args=%v c=%d", sql, args, c)
 	}
 }
 
 func TestPredicateIsNotNull(t *testing.T) {
-	sql, args, off := IsNotNull("email").ToSQL(1)
-	if sql != "email IS NOT NULL" || args != nil || off != 1 {
-		t.Errorf("IsNotNull: sql=%q args=%v off=%d", sql, args, off)
+	c := 0
+	sql, args := IsNotNull("email").ToSQL(&c)
+	if sql != "email IS NOT NULL" || args != nil || c != 0 {
+		t.Errorf("IsNotNull: sql=%q args=%v c=%d", sql, args, c)
 	}
 }
 
 func TestPredicateAnd(t *testing.T) {
-	sql, args, off := And(Eq("a", 1), Eq("b", 2)).ToSQL(1)
-	wantSQL := "(a = $1 AND b = $2)"
-	wantArgs := []any{1, 2}
+	c := 0
+	sql, args := And(Eq("a", 1), Eq("b", 2)).ToSQL(&c)
+	wantSQL := "(a = @p1 AND b = @p2)"
+	wantArgs := map[string]any{"p1": 1, "p2": 2}
 
 	if sql != wantSQL {
 		t.Errorf("And: sql=%q, want %q", sql, wantSQL)
@@ -477,15 +490,16 @@ func TestPredicateAnd(t *testing.T) {
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Errorf("And: args=%v, want %v", args, wantArgs)
 	}
-	if off != 3 {
-		t.Errorf("And: off=%d, want 3", off)
+	if c != 2 {
+		t.Errorf("And: c=%d, want 2", c)
 	}
 }
 
 func TestPredicateOr(t *testing.T) {
-	sql, args, off := Or(Eq("status", "active"), Eq("status", "pending")).ToSQL(1)
-	wantSQL := "(status = $1 OR status = $2)"
-	wantArgs := []any{"active", "pending"}
+	c := 0
+	sql, args := Or(Eq("status", "active"), Eq("status", "pending")).ToSQL(&c)
+	wantSQL := "(status = @p1 OR status = @p2)"
+	wantArgs := map[string]any{"p1": "active", "p2": "pending"}
 
 	if sql != wantSQL {
 		t.Errorf("Or: sql=%q, want %q", sql, wantSQL)
@@ -493,15 +507,16 @@ func TestPredicateOr(t *testing.T) {
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Errorf("Or: args=%v, want %v", args, wantArgs)
 	}
-	if off != 3 {
-		t.Errorf("Or: off=%d, want 3", off)
+	if c != 2 {
+		t.Errorf("Or: c=%d, want 2", c)
 	}
 }
 
 func TestPredicateNot(t *testing.T) {
-	sql, args, off := Not(Eq("deleted", true)).ToSQL(1)
-	wantSQL := "NOT (deleted = $1)"
-	wantArgs := []any{true}
+	c := 0
+	sql, args := Not(Eq("deleted", true)).ToSQL(&c)
+	wantSQL := "NOT (deleted = @p1)"
+	wantArgs := map[string]any{"p1": true}
 
 	if sql != wantSQL {
 		t.Errorf("Not: sql=%q, want %q", sql, wantSQL)
@@ -509,18 +524,19 @@ func TestPredicateNot(t *testing.T) {
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Errorf("Not: args=%v, want %v", args, wantArgs)
 	}
-	if off != 2 {
-		t.Errorf("Not: off=%d, want 2", off)
+	if c != 1 {
+		t.Errorf("Not: c=%d, want 1", c)
 	}
 }
 
 func TestPredicateNestedOrAnd(t *testing.T) {
-	// WHERE (a = $1 AND (b = $2 OR c = $3))
+	// WHERE (a = @p1 AND (b = @p2 OR c = @p3))
+	c := 0
 	pred := And(Eq("a", 1), Or(Eq("b", 2), Eq("c", 3)))
-	sql, args, off := pred.ToSQL(1)
+	sql, args := pred.ToSQL(&c)
 
-	wantSQL := "(a = $1 AND (b = $2 OR c = $3))"
-	wantArgs := []any{1, 2, 3}
+	wantSQL := "(a = @p1 AND (b = @p2 OR c = @p3))"
+	wantArgs := map[string]any{"p1": 1, "p2": 2, "p3": 3}
 
 	if sql != wantSQL {
 		t.Errorf("Nested: sql=%q, want %q", sql, wantSQL)
@@ -528,8 +544,8 @@ func TestPredicateNestedOrAnd(t *testing.T) {
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Errorf("Nested: args=%v, want %v", args, wantArgs)
 	}
-	if off != 4 {
-		t.Errorf("Nested: off=%d, want 4", off)
+	if c != 3 {
+		t.Errorf("Nested: c=%d, want 3", c)
 	}
 }
 
@@ -600,8 +616,8 @@ func TestSelectWhereWithOr(t *testing.T) {
 		).
 		Build()
 
-	wantSQL := "SELECT * FROM users WHERE (role = $1 OR role = $2) AND active = $3"
-	wantArgs := []any{"admin", "superadmin", true}
+	wantSQL := "SELECT * FROM users WHERE (role = @p1 OR role = @p2) AND active = @p3"
+	wantArgs := map[string]any{"p1": "admin", "p2": "superadmin", "p3": true}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -620,8 +636,8 @@ func TestInsertOnConflictDoNothing(t *testing.T) {
 		OnConflict("DO NOTHING").
 		Build()
 
-	wantSQL := "INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING"
-	wantArgs := []any{1, 2}
+	wantSQL := "INSERT INTO follows (follower_id, following_id) VALUES (@p1, @p2) ON CONFLICT DO NOTHING"
+	wantArgs := map[string]any{"p1": 1, "p2": 2}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -639,8 +655,8 @@ func TestInsertOnConflictWithReturning(t *testing.T) {
 		Returning("id").
 		Build()
 
-	wantSQL := "INSERT INTO users (email, name) VALUES ($1, $2) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name RETURNING id"
-	wantArgs := []any{"a@b.com", "Alice"}
+	wantSQL := "INSERT INTO users (email, name) VALUES (@p1, @p2) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name RETURNING id"
+	wantArgs := map[string]any{"p1": "a@b.com", "p2": "Alice"}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)
@@ -653,16 +669,18 @@ func TestInsertOnConflictWithReturning(t *testing.T) {
 // ---------- Raw predicate ----------
 
 func TestRawPredicateSimple(t *testing.T) {
-	sql, args, off := Raw("status = $1", "active").ToSQL(1)
-	if sql != "status = $1" || args[0] != "active" || off != 2 {
-		t.Errorf("Raw: sql=%q args=%v off=%d", sql, args, off)
+	c := 0
+	sql, args := Raw("status = @status", map[string]any{"status": "active"}).ToSQL(&c)
+	if sql != "status = @status" || args["status"] != "active" {
+		t.Errorf("Raw: sql=%q args=%v", sql, args)
 	}
 }
 
-func TestRawPredicateWithOffset(t *testing.T) {
-	sql, args, off := Raw("follower_id = $1 AND following_id = $2", 10, 20).ToSQL(5)
-	wantSQL := "follower_id = $5 AND following_id = $6"
-	wantArgs := []any{10, 20}
+func TestRawPredicateNamedParams(t *testing.T) {
+	c := 0
+	sql, args := Raw("follower_id = @uid AND following_id = @tid", map[string]any{"uid": 10, "tid": 20}).ToSQL(&c)
+	wantSQL := "follower_id = @uid AND following_id = @tid"
+	wantArgs := map[string]any{"uid": 10, "tid": 20}
 
 	if sql != wantSQL {
 		t.Errorf("Raw: sql=%q, want %q", sql, wantSQL)
@@ -670,32 +688,28 @@ func TestRawPredicateWithOffset(t *testing.T) {
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Errorf("Raw: args=%v, want %v", args, wantArgs)
 	}
-	if off != 7 {
-		t.Errorf("Raw: off=%d, want 7", off)
-	}
 }
 
-func TestRawPredicateReusedPlaceholder(t *testing.T) {
-	// PostgreSQL allows using $1 multiple times
-	sql, args, off := Raw("(sender_id = $1 OR receiver_id = $1)", 42).ToSQL(3)
-	wantSQL := "(sender_id = $3 OR receiver_id = $3)"
-	wantArgs := []any{42}
+func TestRawPredicateReusedParam(t *testing.T) {
+	// Same @id used twice — no re-numbering needed with named params
+	c := 0
+	sql, args := Raw("(sender_id = @id OR receiver_id = @id)", map[string]any{"id": 42}).ToSQL(&c)
+	wantSQL := "(sender_id = @id OR receiver_id = @id)"
+	wantArgs := map[string]any{"id": 42}
 
 	if sql != wantSQL {
 		t.Errorf("Raw: sql=%q, want %q", sql, wantSQL)
 	}
 	if !reflect.DeepEqual(args, wantArgs) {
 		t.Errorf("Raw: args=%v, want %v", args, wantArgs)
-	}
-	if off != 4 {
-		t.Errorf("Raw: off=%d, want 4", off)
 	}
 }
 
 func TestRawPredicateNoArgs(t *testing.T) {
-	sql, args, off := Raw("created_at > now() - interval '1 day'").ToSQL(1)
-	if sql != "created_at > now() - interval '1 day'" || len(args) != 0 || off != 1 {
-		t.Errorf("Raw: sql=%q args=%v off=%d", sql, args, off)
+	c := 0
+	sql, args := Raw("created_at > now() - interval '1 day'", nil).ToSQL(&c)
+	if sql != "created_at > now() - interval '1 day'" || args != nil {
+		t.Errorf("Raw: sql=%q args=%v", sql, args)
 	}
 }
 
@@ -704,12 +718,48 @@ func TestRawPredicateInWhere(t *testing.T) {
 		From("users").
 		Where(
 			Eq("active", true),
-			Raw("age BETWEEN $1 AND $2", 18, 65),
+			Raw("age BETWEEN @low AND @high", map[string]any{"low": 18, "high": 65}),
 		).
 		Build()
 
-	wantSQL := "SELECT id, name FROM users WHERE active = $1 AND age BETWEEN $2 AND $3"
-	wantArgs := []any{true, 18, 65}
+	wantSQL := "SELECT id, name FROM users WHERE active = @p1 AND age BETWEEN @low AND @high"
+	wantArgs := map[string]any{"p1": true, "low": 18, "high": 65}
+
+	if sql != wantSQL {
+		t.Errorf("sql = %q, want %q", sql, wantSQL)
+	}
+	if !reflect.DeepEqual(args, wantArgs) {
+		t.Errorf("args = %v, want %v", args, wantArgs)
+	}
+}
+
+// ---------- NamedToPositional ----------
+
+func TestNamedToPositional(t *testing.T) {
+	sql, args := NamedToPositional(
+		"SELECT * FROM users WHERE name = @name AND age > @age",
+		map[string]any{"name": "Alice", "age": 18},
+	)
+
+	wantSQL := "SELECT * FROM users WHERE name = $1 AND age > $2"
+	wantArgs := []any{"Alice", 18}
+
+	if sql != wantSQL {
+		t.Errorf("sql = %q, want %q", sql, wantSQL)
+	}
+	if !reflect.DeepEqual(args, wantArgs) {
+		t.Errorf("args = %v, want %v", args, wantArgs)
+	}
+}
+
+func TestNamedToPositionalReused(t *testing.T) {
+	sql, args := NamedToPositional(
+		"SELECT * FROM t WHERE a = @id OR b = @id",
+		map[string]any{"id": 42},
+	)
+
+	wantSQL := "SELECT * FROM t WHERE a = $1 OR b = $1"
+	wantArgs := []any{42}
 
 	if sql != wantSQL {
 		t.Errorf("sql = %q, want %q", sql, wantSQL)

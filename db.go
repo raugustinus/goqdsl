@@ -5,9 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"regexp"
+	"sort"
 )
 
 // DB wraps a *sql.DB and provides query execution helpers.
+// Named parameters from Build() are automatically converted to positional
+// parameters ($1, $2, ...) for database/sql compatibility.
 type DB struct {
 	conn *sql.DB
 }
@@ -24,20 +28,58 @@ func (db *DB) Conn() *sql.DB {
 
 // Exec executes a builder's query (INSERT, UPDATE, DELETE) and returns the result.
 func (db *DB) Exec(ctx context.Context, b Builder) (sql.Result, error) {
-	query, args := b.Build()
-	return db.conn.ExecContext(ctx, query, args...)
+	query, named := b.Build()
+	positionalSQL, args := namedToPositional(query, named)
+	return db.conn.ExecContext(ctx, positionalSQL, args...)
 }
 
 // QueryRow executes a builder's query and returns a single *sql.Row.
 func (db *DB) QueryRow(ctx context.Context, b Builder) *sql.Row {
-	query, args := b.Build()
-	return db.conn.QueryRowContext(ctx, query, args...)
+	query, named := b.Build()
+	positionalSQL, args := namedToPositional(query, named)
+	return db.conn.QueryRowContext(ctx, positionalSQL, args...)
 }
 
 // Query executes a builder's query and returns *sql.Rows.
 func (db *DB) Query(ctx context.Context, b Builder) (*sql.Rows, error) {
-	query, args := b.Build()
-	return db.conn.QueryContext(ctx, query, args...)
+	query, named := b.Build()
+	positionalSQL, args := namedToPositional(query, named)
+	return db.conn.QueryContext(ctx, positionalSQL, args...)
+}
+
+var namedParamRe = regexp.MustCompile(`@(\w+)`)
+
+// namedToPositional converts a SQL string with @name placeholders to
+// positional $1, $2, ... placeholders for database/sql compatibility.
+// Repeated @name references map to the same $N.
+func namedToPositional(query string, named map[string]any) (string, []any) {
+	if len(named) == 0 {
+		return query, nil
+	}
+
+	seen := make(map[string]int) // name -> $N position
+	var args []any
+	counter := 0
+
+	result := namedParamRe.ReplaceAllStringFunc(query, func(match string) string {
+		name := match[1:] // strip @
+		if pos, ok := seen[name]; ok {
+			return fmt.Sprintf("$%d", pos)
+		}
+		counter++
+		seen[name] = counter
+		args = append(args, named[name])
+		return fmt.Sprintf("$%d", counter)
+	})
+
+	return result, args
+}
+
+// NamedToPositional is the exported version of namedToPositional for use
+// by callers who need to convert named params to positional (e.g. for
+// database/sql drivers that don't support named parameters).
+func NamedToPositional(query string, named map[string]any) (string, []any) {
+	return namedToPositional(query, named)
 }
 
 // FetchOne executes the builder's query and scans the first row into a struct
@@ -53,9 +95,10 @@ func (db *DB) Query(ctx context.Context, b Builder) (*sql.Rows, error) {
 //	user, err := goqdsl.FetchOne[User](ctx, db, Select("uuid", "name").From("users").Where(Eq("uuid", id)))
 func FetchOne[T any](ctx context.Context, db *DB, b Builder) (T, error) {
 	var zero T
-	query, args := b.Build()
+	query, named := b.Build()
+	positionalSQL, args := namedToPositional(query, named)
 
-	rows, err := db.conn.QueryContext(ctx, query, args...)
+	rows, err := db.conn.QueryContext(ctx, positionalSQL, args...)
 	if err != nil {
 		return zero, fmt.Errorf("goqdsl: query failed: %w", err)
 	}
@@ -83,9 +126,10 @@ func FetchOne[T any](ctx context.Context, db *DB, b Builder) (T, error) {
 //
 //	users, err := goqdsl.FetchAll[User](ctx, db, Select("uuid", "name").From("users"))
 func FetchAll[T any](ctx context.Context, db *DB, b Builder) ([]T, error) {
-	query, args := b.Build()
+	query, named := b.Build()
+	positionalSQL, args := namedToPositional(query, named)
 
-	rows, err := db.conn.QueryContext(ctx, query, args...)
+	rows, err := db.conn.QueryContext(ctx, positionalSQL, args...)
 	if err != nil {
 		return nil, fmt.Errorf("goqdsl: query failed: %w", err)
 	}
@@ -157,4 +201,20 @@ func scanStruct[T any](rows *sql.Rows) (T, error) {
 	}
 
 	return result, nil
+}
+
+// sortedKeys returns map keys sorted by length descending, then alphabetically.
+// Used by debug helpers to avoid partial replacements (e.g. @p10 before @p1).
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if len(keys[i]) != len(keys[j]) {
+			return len(keys[i]) > len(keys[j])
+		}
+		return keys[i] < keys[j]
+	})
+	return keys
 }
