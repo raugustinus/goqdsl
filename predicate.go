@@ -2,6 +2,8 @@ package goqdsl
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -11,6 +13,28 @@ import (
 // SQL fragment, the arguments consumed, and the new offset.
 type Predicate interface {
 	ToSQL(offset int) (sql string, args []any, newOffset int)
+}
+
+// --- raw predicate ---
+
+var placeholderRe = regexp.MustCompile(`\$(\d+)`)
+
+type rawPred struct {
+	sql  string
+	args []any
+}
+
+// Raw creates a predicate from a raw SQL fragment with positional parameters.
+// The $1, $2, ... placeholders are re-numbered to fit the current offset.
+// Example: Raw("EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2)", userID, targetID)
+func Raw(sql string, args ...any) Predicate { return rawPred{sql, args} }
+
+func (p rawPred) ToSQL(offset int) (string, []any, int) {
+	result := placeholderRe.ReplaceAllStringFunc(p.sql, func(match string) string {
+		n, _ := strconv.Atoi(match[1:])
+		return fmt.Sprintf("$%d", n+offset-1)
+	})
+	return result, p.args, offset + len(p.args)
 }
 
 // --- comparison predicates ---

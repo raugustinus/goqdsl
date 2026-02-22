@@ -610,3 +610,111 @@ func TestSelectWhereWithOr(t *testing.T) {
 		t.Errorf("args = %v, want %v", args, wantArgs)
 	}
 }
+
+// ---------- INSERT ON CONFLICT ----------
+
+func TestInsertOnConflictDoNothing(t *testing.T) {
+	sql, args := InsertInto("follows").
+		Columns("follower_id", "following_id").
+		Values(1, 2).
+		OnConflict("DO NOTHING").
+		Build()
+
+	wantSQL := "INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING"
+	wantArgs := []any{1, 2}
+
+	if sql != wantSQL {
+		t.Errorf("sql = %q, want %q", sql, wantSQL)
+	}
+	if !reflect.DeepEqual(args, wantArgs) {
+		t.Errorf("args = %v, want %v", args, wantArgs)
+	}
+}
+
+func TestInsertOnConflictWithReturning(t *testing.T) {
+	sql, args := InsertInto("users").
+		Columns("email", "name").
+		Values("a@b.com", "Alice").
+		OnConflict("(email) DO UPDATE SET name = EXCLUDED.name").
+		Returning("id").
+		Build()
+
+	wantSQL := "INSERT INTO users (email, name) VALUES ($1, $2) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name RETURNING id"
+	wantArgs := []any{"a@b.com", "Alice"}
+
+	if sql != wantSQL {
+		t.Errorf("sql = %q, want %q", sql, wantSQL)
+	}
+	if !reflect.DeepEqual(args, wantArgs) {
+		t.Errorf("args = %v, want %v", args, wantArgs)
+	}
+}
+
+// ---------- Raw predicate ----------
+
+func TestRawPredicateSimple(t *testing.T) {
+	sql, args, off := Raw("status = $1", "active").ToSQL(1)
+	if sql != "status = $1" || args[0] != "active" || off != 2 {
+		t.Errorf("Raw: sql=%q args=%v off=%d", sql, args, off)
+	}
+}
+
+func TestRawPredicateWithOffset(t *testing.T) {
+	sql, args, off := Raw("follower_id = $1 AND following_id = $2", 10, 20).ToSQL(5)
+	wantSQL := "follower_id = $5 AND following_id = $6"
+	wantArgs := []any{10, 20}
+
+	if sql != wantSQL {
+		t.Errorf("Raw: sql=%q, want %q", sql, wantSQL)
+	}
+	if !reflect.DeepEqual(args, wantArgs) {
+		t.Errorf("Raw: args=%v, want %v", args, wantArgs)
+	}
+	if off != 7 {
+		t.Errorf("Raw: off=%d, want 7", off)
+	}
+}
+
+func TestRawPredicateReusedPlaceholder(t *testing.T) {
+	// PostgreSQL allows using $1 multiple times
+	sql, args, off := Raw("(sender_id = $1 OR receiver_id = $1)", 42).ToSQL(3)
+	wantSQL := "(sender_id = $3 OR receiver_id = $3)"
+	wantArgs := []any{42}
+
+	if sql != wantSQL {
+		t.Errorf("Raw: sql=%q, want %q", sql, wantSQL)
+	}
+	if !reflect.DeepEqual(args, wantArgs) {
+		t.Errorf("Raw: args=%v, want %v", args, wantArgs)
+	}
+	if off != 4 {
+		t.Errorf("Raw: off=%d, want 4", off)
+	}
+}
+
+func TestRawPredicateNoArgs(t *testing.T) {
+	sql, args, off := Raw("created_at > now() - interval '1 day'").ToSQL(1)
+	if sql != "created_at > now() - interval '1 day'" || len(args) != 0 || off != 1 {
+		t.Errorf("Raw: sql=%q args=%v off=%d", sql, args, off)
+	}
+}
+
+func TestRawPredicateInWhere(t *testing.T) {
+	sql, args := Select("id", "name").
+		From("users").
+		Where(
+			Eq("active", true),
+			Raw("age BETWEEN $1 AND $2", 18, 65),
+		).
+		Build()
+
+	wantSQL := "SELECT id, name FROM users WHERE active = $1 AND age BETWEEN $2 AND $3"
+	wantArgs := []any{true, 18, 65}
+
+	if sql != wantSQL {
+		t.Errorf("sql = %q, want %q", sql, wantSQL)
+	}
+	if !reflect.DeepEqual(args, wantArgs) {
+		t.Errorf("args = %v, want %v", args, wantArgs)
+	}
+}

@@ -7,10 +7,11 @@ import (
 
 // InsertBuilder constructs INSERT statements using a fluent API.
 type InsertBuilder struct {
-	table     string
-	columns   []string
-	values    [][]any
-	returning []string
+	table      string
+	columns    []string
+	values     [][]any
+	onConflict string
+	returning  []string
 }
 
 // InsertInto starts building an INSERT statement for the given table.
@@ -28,6 +29,13 @@ func (b *InsertBuilder) Columns(cols ...string) *InsertBuilder {
 // Can be called multiple times for multi-row inserts.
 func (b *InsertBuilder) Values(vals ...any) *InsertBuilder {
 	b.values = append(b.values, vals)
+	return b
+}
+
+// OnConflict appends an ON CONFLICT clause after VALUES.
+// Example: .OnConflict("DO NOTHING") or .OnConflict("(email) DO UPDATE SET name = EXCLUDED.name")
+func (b *InsertBuilder) OnConflict(action string) *InsertBuilder {
+	b.onConflict = action
 	return b
 }
 
@@ -67,6 +75,12 @@ func (b *InsertBuilder) Build() (string, []any) {
 		sb.WriteString("(")
 		sb.WriteString(strings.Join(placeholders, ", "))
 		sb.WriteString(")")
+	}
+
+	// ON CONFLICT
+	if b.onConflict != "" {
+		sb.WriteString(" ON CONFLICT ")
+		sb.WriteString(b.onConflict)
 	}
 
 	// RETURNING
